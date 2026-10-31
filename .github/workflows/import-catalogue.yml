@@ -1,6 +1,8 @@
 name: Import catalogue
-# Manual: imports Jamendo tracks and refreshes the seed tags (CMP-BE-05).
+# Imports Jamendo tracks and refreshes the dates of the seed tags so weekly charts keep data (CMP-BE-05).
 on:
+  schedule:
+    - cron: '0 2 * * 1'
   workflow_dispatch:
     inputs:
       count:
@@ -17,7 +19,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: node scripts/import-catalogue.mjs ${{ inputs.count }}
+      - run: node scripts/import-catalogue.mjs ${{ inputs.count || '300' }}
         env:
           SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
