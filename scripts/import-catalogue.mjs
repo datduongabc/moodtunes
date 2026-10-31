@@ -63,6 +63,9 @@ async function fetchTracks() {
     if (!res.ok) throw new Error(`Jamendo HTTP ${res.status}`);
     const body = await res.json();
     if (body.headers?.status !== 'success') throw new Error(`Jamendo: ${body.headers?.error_message}`);
+    console.log(
+      `Jamendo page offset=${offset}: ${body.results.length} results (${body.headers?.warnings || 'no warnings'})`,
+    );
     for (const t of body.results) {
       if (t.audio?.startsWith('https://') && t.duration > 30 && /creativecommons\.org/.test(t.license_ccurl ?? '')) {
         tracks.push(t);
@@ -70,6 +73,7 @@ async function fetchTracks() {
     }
     if (body.results.length < 200) break;
   }
+  if (tracks.length === 0) throw new Error('Jamendo returned no usable tracks');
   return tracks.slice(0, TARGET);
 }
 
