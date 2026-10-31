@@ -1,56 +1,93 @@
-# Welcome to your Expo app 👋
+# MoodTunes
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Mood-tagged music player for Android, built for CO3043 Mobile Application Development (HCMUT, semester 261).
+Listeners tag songs with moods, get recommendations for how they feel, follow weekly mood charts, track a daily listening battery and play the Mood Guess game.
 
-## Get started
+- Specification: Assignment 01 report (FR, NFR, architecture, data and API, UI/UX).
+- Changes to the specification: [CHANGELOG-spec.md](CHANGELOG-spec.md).
+- Design: [Figma file](https://www.figma.com/design/ldKFvReiSfET2ObxAV62o5)
 
-1. Install dependencies
+## Stack
 
-   ```bash
-   npm install
-   ```
+| Layer | Technology |
+|---|---|
+| App | Expo SDK 58, React Native 0.88, TypeScript (strict), expo-router |
+| State | Redux Toolkit, RTK Query |
+| Audio | expo-audio (playlist, background playback, lock-screen controls) |
+| Local storage | expo-sqlite (cache, outbox, settings), expo-secure-store (tokens) |
+| UI | React Native Paper (Material Design 3), FlashList, Be Vietnam Pro |
+| Backend | Supabase: Auth, PostgreSQL with row-level security, Edge Function `api` (Deno, Hono), pg_cron |
+| Music | Jamendo (Creative Commons) |
+| CI | GitHub Actions: lint, type check, tests, secret scan, release APK |
 
-2. Start the app
+## Run the app
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Requirements: Node.js 22, and either an Android device with USB debugging or an Android emulator (API 29 or later) with Android Studio and JDK 17.
 
 ```bash
-npm run reset-project
+git clone <repository-url> moodtunes
+cd moodtunes
+cp .env.example .env        # the backend is hosted, no local server is needed
+npm ci
+npx expo run:android        # builds a development build and starts Metro
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+The app needs a development build because it uses native modules (background audio, SQLite, SecureStore); it does not run in Expo Go.
 
-### Other setup steps
+### Install the release APK instead
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Download `MoodTunes-<version>.apk` from the latest [GitHub release](../../releases) (or the `MoodTunes-apk` artifact of the **Android release** workflow) and open it on the device. Allow installation from unknown sources when asked.
 
-## Learn more
+## Checks
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm run lint           # ESLint (expo config)
+npm run typecheck      # tsc --noEmit
+npm test               # Jest unit tests
+npm run test:coverage  # coverage of the domain layer (threshold 70%)
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Project structure
 
-## Join the community
+```
+src/
+  app/            expo-router screens and layouts (presentation)
+  presentation/   components, view-model hooks, theme
+  domain/         entities, rules (battery, game, outbox, check-in), use cases
+  data/           remote (RTK Query API), local (SQLite), player (expo-audio), sync (outbox engine)
+  store/          Redux store, slices and service wiring
+  core/           configuration, HTTP client, errors, Supabase client
+supabase/
+  migrations/     schema, row-level security, SQL functions, cron jobs
+  functions/api/  Edge Function with the /v1 endpoints
+scripts/          catalogue import and seed data
+```
 
-Join our community of developers creating universal apps.
+## Backend
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The Supabase project is hosted. To recreate it:
+
+1. Create a Supabase project and run the files in `supabase/migrations` in order (SQL editor or `supabase db push`).
+2. Deploy the Edge Function: `supabase functions deploy api`.
+3. In Authentication settings, turn off **Confirm email** (AC-01.1.1 opens the app directly after sign-up).
+4. Import the catalogue: set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `JAMENDO_CLIENT_ID`, then run `node scripts/import-catalogue.mjs 300`.
+
+GitHub configuration used by the workflows:
+
+| Name | Kind | Used by |
+|---|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_KEY`, `EXPO_PUBLIC_SENTRY_DSN` | Variables | Android release, keep-alive |
+| `SUPABASE_SERVICE_ROLE_KEY`, `JAMENDO_CLIENT_ID` | Secrets | Import catalogue |
+
+## Music and licences
+
+All tracks come from [Jamendo](https://www.jamendo.com) under Creative Commons licences and are used for non-commercial purposes. The title, artist, source and licence of each song are shown in **Song info** on the Now Playing screen.
+
+## Team
+
+| Member | Student ID |
+|---|---|
+| Dương Nguyễn Tấn Đạt | 2352222 |
+| Nguyễn Ngọc Gia Hân | 2452320 |
+
+AI tools were used during development; see the declaration in the report.

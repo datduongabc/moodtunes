@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public Supabase URL and publishable key (NFR-SEC-03)"
+paths = ['''\.env\.example$''']
