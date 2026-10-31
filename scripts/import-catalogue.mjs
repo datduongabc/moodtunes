@@ -46,15 +46,17 @@ function moodScores(track) {
 }
 
 async function fetchTracks() {
-  const tracks = [];
-  for (let offset = 0; tracks.length < TARGET && offset < 2000; offset += 200) {
+  // Jamendo returns at most 200 results per ordering, so several orderings are combined without duplicates
+  const orders = ['popularity_total', 'popularity_month', 'downloads_total', 'listens_total', 'popularity_week'];
+  const byId = new Map();
+  for (const order of orders) {
+    if (byId.size >= TARGET) break;
     const url = new URL('https://api.jamendo.com/v3.0/tracks/');
     url.search = new URLSearchParams({
       client_id: JAMENDO_CLIENT_ID,
       format: 'json',
       limit: '200',
-      offset: String(offset),
-      order: 'popularity_total',
+      order,
       include: 'musicinfo licenses',
       audioformat: 'mp32',
       imagesize: '300',
@@ -63,18 +65,18 @@ async function fetchTracks() {
     if (!res.ok) throw new Error(`Jamendo HTTP ${res.status}`);
     const body = await res.json();
     if (body.headers?.status !== 'success') throw new Error(`Jamendo: ${body.headers?.error_message}`);
-    console.log(
-      `Jamendo page offset=${offset}: ${body.results.length} results (${body.headers?.warnings || 'no warnings'})`,
-    );
+    let added = 0;
     for (const t of body.results) {
+      if (byId.has(t.id)) continue;
       if (t.audio?.startsWith('https://') && t.duration > 30 && /creativecommons\.org/.test(t.license_ccurl ?? '')) {
-        tracks.push(t);
+        byId.set(t.id, t);
+        added++;
       }
     }
-    if (body.results.length < 200) break;
+    console.log(`Jamendo order=${order}: ${body.results.length} results, ${added} new`);
   }
-  if (tracks.length === 0) throw new Error('Jamendo returned no usable tracks');
-  return tracks.slice(0, TARGET);
+  if (byId.size === 0) throw new Error('Jamendo returned no usable tracks');
+  return [...byId.values()].slice(0, TARGET);
 }
 
 async function seedUsers() {
