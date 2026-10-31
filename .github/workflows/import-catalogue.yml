@@ -1,0 +1,24 @@
+name: Import catalogue
+# Manual: imports Jamendo tracks and refreshes the seed tags (CMP-BE-05).
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: Number of tracks
+        default: '300'
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/import-catalogue.mjs ${{ inputs.count }}
+        env:
+          SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          JAMENDO_CLIENT_ID: ${{ secrets.JAMENDO_CLIENT_ID }}
