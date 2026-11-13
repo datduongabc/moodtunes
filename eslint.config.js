@@ -5,6 +5,12 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*'],
+    ignores: ['dist/*', 'supabase/**'],
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    rules: {
+      'expo/no-env-var-destructuring': 'off',
+    },
   },
 ]);

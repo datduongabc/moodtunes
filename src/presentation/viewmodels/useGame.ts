@@ -25,6 +25,7 @@ export function useGame() {
   const [tagged, setTagged] = useState(false);
   const [bestBefore, setBestBefore] = useState(0);
   const pendingAnswer = useRef<Mood | null>(null);
+  const submitting = useRef(false);
   const question = round?.questions[index] ?? null;
 
   const resetQuestion = () => {
@@ -48,17 +49,22 @@ export function useGame() {
   };
 
   const answer = async (mood: Mood | null) => {
-    if (!round || phase !== 'question') return;
-    setChosen(mood);
-    pendingAnswer.current = mood;
-    PlayerService.stopClip();
-    const res = await sendAnswer({ roundId: round.roundId, index, mood });
-    if ('error' in res) {
-      setPhase('lost');
-      return;
+    if (!round || phase !== 'question' || submitting.current) return;
+    submitting.current = true;
+    try {
+      setChosen(mood);
+      pendingAnswer.current = mood;
+      PlayerService.stopClip();
+      const res = await sendAnswer({ roundId: round.roundId, index, mood });
+      if ('error' in res) {
+        setPhase('lost');
+        return;
+      }
+      setResult(res.data);
+      setPhase('feedback');
+    } finally {
+      submitting.current = false;
     }
-    setResult(res.data);
-    setPhase('feedback');
   };
   const answerRef = useRef(answer);
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { isOfflineError } from '@/core/errors';
 import { backoffMs } from '@/domain/outbox';
-import { listPending, markAttempt, remove } from '@/data/local/outboxDao';
+import { hasPending, listPending, markAttempt, remove } from '@/data/local/outboxDao';
 import { api } from '@/data/remote/api';
 import { sendTagChange } from '@/data/remote/tags';
 import type { AppDispatch, RootState } from '@/store';
@@ -45,7 +45,9 @@ export class SyncEngine {
         const res = await sendTagChange(change);
         if (!('error' in res)) {
           await remove(change);
-          this.dispatch(tagsActions.synced({ songId: change.songId, mood: change.mood }));
+          if (!(await hasPending(change.songId, change.mood))) {
+            this.dispatch(tagsActions.synced({ songId: change.songId, mood: change.mood }));
+          }
           sent++;
           continue;
         }

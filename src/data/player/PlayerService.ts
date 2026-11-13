@@ -35,6 +35,7 @@ class PlayerServiceImpl {
   private clip: AudioPlayer | null = null;
   private clipTimer: ReturnType<typeof setTimeout> | null = null;
   private songs: Song[] = [];
+  private pendingRestore: { songs: Song[]; index: number; positionSec: number } | null = null;
   private events: PlayerEvents | null = null;
   private ready: Promise<void> | null = null;
 
@@ -67,8 +68,35 @@ class PlayerServiceImpl {
     return this.ready;
   }
 
+  /** Stores a persisted queue to be loaded lazily on first playback interaction after cold start. */
+  setRestored(songs: Song[], index: number, positionSec: number) {
+    if (songs.length === 0) {
+      this.pendingRestore = null;
+      return;
+    }
+    const clampedIndex = Math.max(0, Math.min(index, songs.length - 1));
+    this.pendingRestore = { songs, index: clampedIndex, positionSec: Math.max(0, positionSec) };
+  }
+
+  private async ensureRestored(): Promise<void> {
+    if (!this.pendingRestore) return;
+    const { songs, index, positionSec } = this.pendingRestore;
+    this.pendingRestore = null;
+    await this.ready;
+    const p = this.playlist;
+    if (!p || songs.length === 0) return;
+    this.songs = songs;
+    p.clear();
+    for (const s of songs) p.add({ uri: s.audioUrl, name: s.title });
+    p.skipTo(index);
+    if (positionSec > 0) p.seekTo(positionSec);
+    p.setActiveForLockScreen(true, meta(songs[index]), { showNextTrack: true, showPreviousTrack: true });
+    this.events?.onIndex(index);
+  }
+
   /** Starts a list; the following songs form the queue (AC-03.3.1). */
   async playList(songs: Song[], startIndex: number): Promise<void> {
+    this.pendingRestore = null;
     await this.ready;
     const p = this.playlist;
     if (!p || songs.length === 0) return;
@@ -82,27 +110,42 @@ class PlayerServiceImpl {
     this.events?.onIndex(startIndex);
   }
 
-  play() {
+  async play() {
     this.stopClip();
+    if (this.pendingRestore) await this.ensureRestored();
     this.playlist?.play();
   }
   pause() {
     this.playlist?.pause();
   }
-  next() {
+  async next() {
+    if (this.pendingRestore) await this.ensureRestored();
     this.playlist?.next();
   }
-  previous() {
+  async previous() {
+    if (this.pendingRestore) await this.ensureRestored();
     const p = this.playlist;
     if (!p) return;
     if (p.currentTime > 3) p.seekTo(0);
     else p.previous();
   }
-  seekTo(sec: number) {
+  async seekTo(sec: number) {
+    if (this.pendingRestore) await this.ensureRestored();
     this.playlist?.seekTo(sec);
   }
 
   removeAt(index: number) {
+    if (this.pendingRestore) {
+      this.pendingRestore.songs.splice(index, 1);
+      if (this.pendingRestore.songs.length === 0) {
+        this.pendingRestore = null;
+      } else if (index < this.pendingRestore.index) {
+        this.pendingRestore.index--;
+      } else if (this.pendingRestore.index >= this.pendingRestore.songs.length) {
+        this.pendingRestore.index = this.pendingRestore.songs.length - 1;
+      }
+      return;
+    }
     this.songs.splice(index, 1);
     this.playlist?.remove(index);
   }
@@ -125,6 +168,7 @@ class PlayerServiceImpl {
   }
 
   reset() {
+    this.pendingRestore = null;
     this.stopClip();
     this.songs = [];
     this.playlist?.clear();

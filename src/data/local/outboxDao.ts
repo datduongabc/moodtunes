@@ -62,3 +62,13 @@ export async function markAttempt(change: OutboxChange): Promise<void> {
     change.createdAt,
   );
 }
+
+export async function hasPending(songId: number, mood: Mood): Promise<boolean> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ one: number }>(
+    'SELECT 1 AS one FROM outbox WHERE song_id = ? AND mood_code = ? LIMIT 1',
+    songId,
+    mood,
+  );
+  return row !== null;
+}

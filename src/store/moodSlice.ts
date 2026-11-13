@@ -34,6 +34,7 @@ export const moodSlice = createSlice({
     cameForeground: (s) => {
       s.backgroundSince = null;
     },
+    cleared: () => initialState,
   },
 });
 export const moodActions = moodSlice.actions;

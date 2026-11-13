@@ -29,7 +29,7 @@ export const toggleTag = makeToggleTag({
   getTag: (songId, mood) => getState().tags.bySong[songId]?.[mood],
   defaultContext: () => getState().mood.context,
   showOn: (songId, mood, tag) => dispatch(tagsActions.tagSet({ songId, mood, tag: { ...tag, pending: true } })),
-  showOff: (songId, mood) => dispatch(tagsActions.tagRemoved({ songId, mood })),
+  showOff: (songId, mood) => dispatch(tagsActions.tagRemoved({ songId, mood, pending: true })),
   enqueue,
   sync: syncEngine.kick,
   now: Date.now,
@@ -103,7 +103,10 @@ async function restoreLocal() {
     kvGet<battery.BatteryState>(KV.battery),
     kvGet<{ extendedAnswerTime: boolean }>(KV.ui),
   ]);
-  if (p) dispatch(playerActions.restored(p));
+  if (p) {
+    dispatch(playerActions.restored(p));
+    PlayerService.setRestored(p.queue ?? [], p.index ?? 0, p.positionSec ?? 0);
+  }
   if (m) dispatch(moodActions.restored(m));
   if (b) dispatch(batteryActions.set(battery.rollOver({ ...b, playingSince: null }, Date.now())));
   if (u) dispatch(uiActions.extendedAnswerTime(u.extendedAnswerTime));
@@ -118,7 +121,7 @@ async function restoreLocal() {
         }),
       );
     } else {
-      dispatch(tagsActions.tagRemoved({ songId: c.songId, mood: c.mood }));
+      dispatch(tagsActions.tagRemoved({ songId: c.songId, mood: c.mood, pending: true }));
     }
   }
 }
@@ -131,6 +134,8 @@ export async function signOut() {
   await clearPersonalData(); // tokens, cache and pending outbox changes (AC-01.2.2)
   dispatch(playerActions.cleared());
   dispatch(tagsActions.cleared());
+  dispatch(moodActions.cleared());
+  dispatch(batteryActions.cleared());
   dispatch(api.util.resetApiState());
   dispatch(sessionActions.signedOut());
 }

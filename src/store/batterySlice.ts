@@ -12,6 +12,7 @@ export const batterySlice = createSlice({
       s.warned20 = false;
       s.warned0 = false;
     },
+    cleared: () => initialBattery(Date.now()),
   },
   extraReducers: (b) => {
     // the daily goal is stored in the profile (AC-08.1.2)
