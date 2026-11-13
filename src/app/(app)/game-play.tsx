@@ -2,9 +2,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Appbar, Button, Dialog, Portal, ProgressBar } from 'react-native-paper';
-import { moodInfo } from '@/domain/moods';
-import type { Mood } from '@/domain/types';
-import { MoodIcon } from '@/presentation/components/MoodChip';
 import { Screen } from '@/presentation/components/Screen';
 import { StatePanel } from '@/presentation/components/StatePanel';
 import { Txt } from '@/presentation/components/Txt';
@@ -28,15 +25,15 @@ export default function GamePlay() {
       <Screen edges={['top', 'bottom']}>
         <Appbar.Header style={styles.bar}>
           <Appbar.BackAction onPress={quit} />
-          <Appbar.Content title="Mood Guess" />
+          <Appbar.Content title="Artist Guess" />
         </Appbar.Header>
         {vm.phase === 'notEnough' ? (
           <StatePanel
             icon="gamepad-variant-outline"
-            title="Not enough tagged songs yet"
-            body="The game needs 10 songs with at least 5 tags each. Tag songs or vote in Charts, then try again."
-            action="Go to Charts"
-            onAction={() => router.replace('/charts')}
+            title="Not enough songs yet"
+            body="The game needs at least 10 songs from 4 artists. Try again once the catalogue is imported."
+            action="Back"
+            onAction={quit}
           />
         ) : (
           <StatePanel
@@ -81,10 +78,10 @@ export default function GamePlay() {
   const q = vm.question;
   if (!q) return null;
   const feedback = vm.phase === 'feedback' && vm.result;
-  const optionState = (m: Mood) => {
+  const optionState = (artist: string) => {
     if (!feedback || !vm.result) return 'default';
-    if (m === vm.result.correctMood) return 'correct';
-    if (m === vm.chosen) return 'wrong';
+    if (artist === vm.result.correctArtist) return 'correct';
+    if (artist === vm.chosen) return 'wrong';
     return 'disabled';
   };
 
@@ -119,26 +116,8 @@ export default function GamePlay() {
               +{vm.result.points} points
             </Txt>
             <Txt muted numberOfLines={1}>
-              {q.song.title}, {q.song.artistName}
+              {q.song.title}, {vm.result.correctArtist}
             </Txt>
-            <View style={styles.dist}>
-              {vm.result.distribution.map((d) => (
-                <View key={d.mood} style={styles.distRow}>
-                  <MoodIcon mood={d.mood} size={18} />
-                  <Txt variant="labelMedium" style={styles.distLabel}>
-                    {moodInfo(d.mood).label}
-                  </Txt>
-                  <View style={styles.distTrack}>
-                    <View
-                      style={[styles.distFill, { width: `${d.percent}%`, backgroundColor: moodInfo(d.mood).color }]}
-                    />
-                  </View>
-                  <Txt variant="labelMedium" style={styles.pct}>
-                    {d.percent}%
-                  </Txt>
-                </View>
-              ))}
-            </View>
           </View>
         ) : (
           <View style={styles.prompt}>
@@ -146,7 +125,7 @@ export default function GamePlay() {
               <Txt variant="titleLarge">{vm.left} s</Txt>
             </View>
             <Txt variant="titleLarge" style={styles.center}>
-              Which mood fits this song?
+              Who is the artist?
             </Txt>
             <Txt variant="bodySmall" muted>
               Answer within {vm.limit} seconds
@@ -159,27 +138,25 @@ export default function GamePlay() {
           </View>
         )}
         <View style={styles.grid}>
-          {q.options.map((m) => {
-            const st = optionState(m);
-            const info = moodInfo(m);
+          {q.options.map((artist, idx) => {
+            const st = optionState(artist);
             return (
               <Pressable
-                key={m}
-                onPress={() => void vm.answer(m)}
+                key={artist}
+                onPress={() => void vm.answer(artist)}
                 disabled={vm.phase !== 'question'}
                 accessibilityRole="button"
-                accessibilityLabel={`${info.label}${st === 'correct' ? ', correct answer' : st === 'wrong' ? ', your answer, wrong' : ''}`}
+                accessibilityLabel={`${artist}${st === 'correct' ? ', correct answer' : st === 'wrong' ? ', your answer, wrong' : ''}`}
                 style={[
                   styles.option,
                   st === 'correct' && { borderColor: color.success, backgroundColor: tint(color.success) },
                   st === 'wrong' && { borderColor: color.error, backgroundColor: tint(color.error) },
                   st === 'disabled' && { opacity: 0.5 },
                 ]}
-                testID={`option-${m}`}
+                testID={`option-${idx}`}
               >
-                <MoodIcon mood={m} size={22} />
-                <Txt variant="titleSmall" numberOfLines={1} style={styles.flex}>
-                  {info.label}
+                <Txt variant="titleSmall" numberOfLines={2} style={styles.flex}>
+                  {artist}
                 </Txt>
               </Pressable>
             );
@@ -188,14 +165,6 @@ export default function GamePlay() {
       </ScrollView>
       {feedback && vm.result ? (
         <View style={styles.bottom}>
-          <Button
-            mode="contained-tonal"
-            icon={vm.tagged ? 'check' : 'tag-outline'}
-            disabled={vm.tagged}
-            onPress={() => vm.tagAs(vm.chosen ?? vm.result!.correctMood)}
-          >
-            {vm.tagged ? 'Tagged' : `Tag as ${moodInfo(vm.chosen ?? vm.result.correctMood).label}`}
-          </Button>
           <Button mode="contained" onPress={vm.next} testID="next-question">
             {vm.result.finished ? 'See result' : 'Next'}
           </Button>

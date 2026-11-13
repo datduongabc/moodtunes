@@ -46,17 +46,16 @@ export type Recommendations = {
 export type ChartEntry = { rank: number; votes: number; previousRank: number | null; myVote: boolean; song: Song };
 export type Chart = { mood: Mood; period: 'week'; computedAt: string | null; isSample: boolean; entries: ChartEntry[] };
 
-export type GameQuestion = { index: number; song: Song; clipStartSec: number; options: Mood[] };
+export type GameQuestion = { index: number; song: Song; clipStartSec: number; options: string[] };
 export type GameRound = { roundId: string; questions: GameQuestion[] };
 export type AnswerResult = {
   correct: boolean;
-  correctMood: Mood;
+  correctArtist: string;
   points: number;
   streak: number;
   totalScore: number;
   correctCount: number;
   finished: boolean;
-  distribution: { mood: Mood; percent: number }[];
 };
 export type GameStats = { bestScore: number; roundsPlayed: number };
 

@@ -258,13 +258,15 @@ app.put('/v1/game-rounds/:roundId/answers/:index', async (c) => {
     throw new ApiError('VALIDATION_ERROR', 'Index must be 0 to 9', { field: 'index' });
   }
   const body = await readJson(c);
-  const mood = body.mood ?? null;
-  if (mood !== null && !isMood(mood)) throw new ApiError('VALIDATION_ERROR', 'Unknown mood', { field: 'mood' });
+  const artist = body.artist ?? null;
+  if (artist !== null && (typeof artist !== 'string' || artist.trim().length === 0)) {
+    throw new ApiError('VALIDATION_ERROR', 'Invalid artist', { field: 'artist' });
+  }
   const { data, error } = await admin.rpc('answer_question', {
     p_user: c.get('userId'),
     p_round: roundId,
     p_idx: index,
-    p_mood: mood,
+    p_artist: artist,
   });
   if (error) throw fromDbError(error);
   return c.json(data);

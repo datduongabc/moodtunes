@@ -165,11 +165,11 @@ export const api = createApi({
     startRound: b.mutation<GameRound, void>({
       query: () => ({ url: `${apiBaseUrl()}/game-rounds`, method: 'POST', body: {} }),
     }),
-    answer: b.mutation<AnswerResult, { roundId: string; index: number; mood: Mood | null }>({
-      query: ({ roundId, index, mood }) => ({
+    answer: b.mutation<AnswerResult, { roundId: string; index: number; artist: string | null }>({
+      query: ({ roundId, index, artist }) => ({
         url: `${apiBaseUrl()}/game-rounds/${roundId}/answers/${index}`,
         method: 'PUT',
-        body: { mood },
+        body: { artist },
       }),
       invalidatesTags: (r) => (r?.finished ? ['GameStats'] : []),
     }),

@@ -21,7 +21,7 @@ export default function GameLobby() {
     return (
       <Screen>
         <Appbar.Header style={styles.bar}>
-          <Appbar.Content title="Mood Guess" />
+          <Appbar.Content title="Artist Guess" />
         </Appbar.Header>
         <StatePanel
           icon="wifi-off"
@@ -37,19 +37,19 @@ export default function GameLobby() {
 
   const rules: [string, string][] = [
     ['timer-outline', `15-second clip, ${answerSeconds(extended)} seconds to answer`],
-    ['emoticon-outline', 'Choose from 4 moods'],
+    ['account-music-outline', 'Choose from 4 artists'],
     ['star-outline', '100 points per correct answer, +20 for each one in a row'],
   ];
   return (
     <Screen>
       <Appbar.Header style={styles.bar}>
-        <Appbar.Content title="Mood Guess" />
+        <Appbar.Content title="Artist Guess" />
       </Appbar.Header>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <MaterialCommunityIcons name="gamepad-variant" size={40} color={color.onSurface} />
-          <Txt variant="headlineSmall">Guess the mood</Txt>
-          <Txt>Hear 10 short clips and pick the mood most listeners chose for each song.</Txt>
+          <Txt variant="headlineSmall">Guess the artist</Txt>
+          <Txt>Hear 10 short clips and pick the artist for each song.</Txt>
         </View>
         <View style={styles.rules}>
           {rules.map(([icon, text]) => (

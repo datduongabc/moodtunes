@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AppError } from '@/core/errors';
 import { answerSeconds, QUESTIONS_PER_ROUND } from '@/domain/game';
-import type { AnswerResult, GameRound, Mood } from '@/domain/types';
+import type { AnswerResult, GameRound } from '@/domain/types';
 import { PlayerService } from '@/data/player/PlayerService';
 import { useAnswerMutation, useGameStatsQuery, useStartRoundMutation } from '@/data/remote/api';
 import { useAppSelector } from '@/store';
-import { toggleTag } from '@/store/services';
 
 type Phase = 'starting' | 'notEnough' | 'error' | 'question' | 'feedback' | 'lost' | 'result';
 
@@ -20,17 +19,15 @@ export function useGame() {
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>('starting');
   const [result, setResult] = useState<AnswerResult | null>(null);
-  const [chosen, setChosen] = useState<Mood | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
   const [left, setLeft] = useState(limit);
-  const [tagged, setTagged] = useState(false);
   const [bestBefore, setBestBefore] = useState(0);
-  const pendingAnswer = useRef<Mood | null>(null);
+  const pendingAnswer = useRef<string | null>(null);
   const submitting = useRef(false);
   const question = round?.questions[index] ?? null;
 
   const resetQuestion = () => {
     setChosen(null);
-    setTagged(false);
     setLeft(limit);
   };
 
@@ -48,14 +45,14 @@ export function useGame() {
     setPhase('question');
   };
 
-  const answer = async (mood: Mood | null) => {
+  const answer = async (artist: string | null) => {
     if (!round || phase !== 'question' || submitting.current) return;
     submitting.current = true;
     try {
-      setChosen(mood);
-      pendingAnswer.current = mood;
+      setChosen(artist);
+      pendingAnswer.current = artist;
       PlayerService.stopClip();
-      const res = await sendAnswer({ roundId: round.roundId, index, mood });
+      const res = await sendAnswer({ roundId: round.roundId, index, artist });
       if ('error' in res) {
         setPhase('lost');
         return;
@@ -98,7 +95,7 @@ export function useGame() {
 
   const retryLost = async () => {
     if (!round) return;
-    const res = await sendAnswer({ roundId: round.roundId, index, mood: pendingAnswer.current });
+    const res = await sendAnswer({ roundId: round.roundId, index, artist: pendingAnswer.current });
     if ('error' in res) return;
     setResult(res.data);
     setPhase('feedback');
@@ -116,12 +113,6 @@ export function useGame() {
     }
   };
 
-  const tagAs = (mood: Mood) => {
-    if (!question) return;
-    void toggleTag(question.song.id, mood, { forceOn: true }); // AC-11.1.5
-    setTagged(true);
-  };
-
   const total = result?.totalScore ?? 0;
   return {
     phase,
@@ -132,13 +123,11 @@ export function useGame() {
     limit,
     chosen,
     result,
-    tagged,
     score: total,
     streak: result?.streak ?? 0,
     isNewBest: total > 0 && total > bestBefore,
     answer,
     next,
-    tagAs,
     retryLost,
     restart: () => {
       setPhase('starting');
