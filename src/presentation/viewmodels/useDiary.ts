@@ -16,9 +16,11 @@ const dayLabel = (key: string, now = new Date()) => {
   return new Date(yy, mm - 1, dd).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 };
 
-/** View model for SCR-11 Diary (UC-07, FR-07). Pending local tags are merged in (AC-07.1.3). */
-export function useDiary() {
-  const [filter, setFilter] = useState<Mood | null>(null);
+/**
+ * The listener's own tags of the last 90 days: server entries with pending local changes merged in
+ * (AC-07.1.3). Shared by the diary and the mood statistics so both show the same tags.
+ */
+export function useDiaryEntries() {
   const q = useDiaryQuery();
   const online = useAppSelector((s) => s.network.online);
   const local = useAppSelector((s) => s.tags.bySong);
@@ -57,6 +59,14 @@ export function useDiary() {
     }
     return out;
   }, [q.data, local, recent, queue]);
+
+  return { entries, q, online };
+}
+
+/** View model for SCR-11 Diary (UC-07, FR-07). */
+export function useDiary() {
+  const [filter, setFilter] = useState<Mood | null>(null);
+  const { entries, q, online } = useDiaryEntries();
 
   const days = useMemo(
     () => groupByDay(entries, filter).map((d) => ({ ...d, label: dayLabel(d.day) })),
