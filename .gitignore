@@ -49,3 +49,4 @@ example
 /android
 /ios
 coverage/
+supabase/.temp/
