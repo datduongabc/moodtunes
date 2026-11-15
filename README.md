@@ -29,10 +29,25 @@ Requirements: Node.js 22, and either an Android device with USB debugging or an 
 ```bash
 git clone <repository-url> moodtunes
 cd moodtunes
-cp .env.example .env        # the backend is hosted, no local server is needed
+cp .env.example .env        # then fill in the two Supabase values, see below
 npm ci
 npx expo run:android        # builds a development build and starts Metro
 ```
+
+### Supabase keys
+
+`.env.example` is committed without values; the backend is hosted, so no local server is needed, but `.env` must contain the URL and the publishable key of the Supabase project.
+Without them the app stops at start-up with `Missing EXPO_PUBLIC_SUPABASE_URL`.
+
+- **Team members:** open the project in the [Supabase dashboard](https://supabase.com/dashboard), go to **Project Settings → API Keys**, and copy the project URL into `EXPO_PUBLIC_SUPABASE_URL` and the **publishable** key (`sb_publishable_...`) into `EXPO_PUBLIC_SUPABASE_KEY`.
+- **Assessors:** the two values are provided with the assignment submission. Paste them into `.env` as above.
+- **Your own backend:** create a project as described in [Backend](#backend) and use its URL and publishable key.
+
+Both values are public by design and every table is protected by row-level security (NFR-SEC-03).
+Never put the **secret** or **service_role** key in `.env`: it bypasses row-level security, and every `EXPO_PUBLIC_` variable is bundled into the app.
+After editing `.env`, restart Metro so that the new values are picked up.
+
+The release APK does not need `.env`: the release workflow reads the same two values from the GitHub repository variables.
 
 The app needs a development build because it uses native modules (background audio, SQLite, SecureStore); it does not run in Expo Go.
 
