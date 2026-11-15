@@ -23,7 +23,7 @@ export default function AppLayout() {
       <Stack.Screen name="queue" />
       <Stack.Screen name="library" />
       <Stack.Screen name="battery" />
-      <Stack.Screen name="game-play" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="stats" />
       <Stack.Screen
         name="tag-sheet"
         options={{ presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }}

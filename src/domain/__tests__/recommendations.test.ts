@@ -3,6 +3,7 @@ import type { Recommendation, Song } from '../types';
 
 const song = (id: number): Song => ({
   id,
+  jamendoId: String(id),
   title: `S${id}`,
   artistName: 'A',
   albumName: null,

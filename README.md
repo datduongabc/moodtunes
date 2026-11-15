@@ -1,10 +1,12 @@
 # MoodTunes
 
 Mood-tagged music player for Android, built for CO3043 Mobile Application Development (HCMUT, semester 261).
-Listeners tag songs with moods, get recommendations for how they feel, follow weekly mood charts, track a daily listening battery and play the Mood Guess game.
+Listeners tag songs with moods, get recommendations for how they feel, follow weekly mood charts, track a daily listening battery, share songs to other apps and run Pomodoro focus sessions that play and pause music on their own.
 
 - Specification: Assignment 01 report (FR, NFR, architecture, data and API, UI/UX).
 - Changes to the specification: [CHANGELOG-spec.md](CHANGELOG-spec.md).
+- API contract: [docs/openapi.yaml](docs/openapi.yaml), with a Postman collection in [docs/moodtunes.postman_collection.json](docs/moodtunes.postman_collection.json).
+- Test report: [docs/test-report.md](docs/test-report.md).
 - Design: [Figma file](https://www.figma.com/design/ldKFvReiSfET2ObxAV62o5)
 
 ## Stack
@@ -27,10 +29,25 @@ Requirements: Node.js 22, and either an Android device with USB debugging or an 
 ```bash
 git clone <repository-url> moodtunes
 cd moodtunes
-cp .env.example .env        # the backend is hosted, no local server is needed
+cp .env.example .env        # then fill in the two Supabase values, see below
 npm ci
 npx expo run:android        # builds a development build and starts Metro
 ```
+
+### Supabase keys
+
+`.env.example` is committed without values; the backend is hosted, so no local server is needed, but `.env` must contain the URL and the publishable key of the Supabase project.
+Without them the app stops at start-up with `Missing EXPO_PUBLIC_SUPABASE_URL`.
+
+- **Team members:** open the project in the [Supabase dashboard](https://supabase.com/dashboard), go to **Project Settings → API Keys**, and copy the project URL into `EXPO_PUBLIC_SUPABASE_URL` and the **publishable** key (`sb_publishable_...`) into `EXPO_PUBLIC_SUPABASE_KEY`.
+- **Assessors:** the two values are provided with the assignment submission. Paste them into `.env` as above.
+- **Your own backend:** create a project as described in [Backend](#backend) and use its URL and publishable key.
+
+Both values are public by design and every table is protected by row-level security (NFR-SEC-03).
+Never put the **secret** or **service_role** key in `.env`: it bypasses row-level security, and every `EXPO_PUBLIC_` variable is bundled into the app.
+After editing `.env`, restart Metro so that the new values are picked up.
+
+The release APK does not need `.env`: the release workflow reads the same two values from the GitHub repository variables.
 
 The app needs a development build because it uses native modules (background audio, SQLite, SecureStore); it does not run in Expo Go.
 
@@ -43,7 +60,7 @@ Download `MoodTunes-<version>.apk` from the latest [GitHub release](../../releas
 ```bash
 npm run lint           # ESLint (expo config)
 npm run typecheck      # tsc --noEmit
-npm test               # Jest unit tests
+npm test               # Jest unit tests (domain rules and Edge Function validators)
 npm run test:coverage  # coverage of the domain layer (threshold 70%)
 ```
 
@@ -53,13 +70,13 @@ npm run test:coverage  # coverage of the domain layer (threshold 70%)
 src/
   app/            expo-router screens and layouts (presentation)
   presentation/   components, view-model hooks, theme
-  domain/         entities, rules (battery, game, outbox, check-in), use cases
+  domain/         entities, rules (battery, Pomodoro, sharing, charts, statistics, outbox, check-in), use cases
   data/           remote (RTK Query API), local (SQLite), player (expo-audio), sync (outbox engine)
   store/          Redux store, slices and service wiring
   core/           configuration, HTTP client, errors, Supabase client
 supabase/
   migrations/     schema, row-level security, SQL functions, cron jobs
-  functions/api/  Edge Function with the /v1 endpoints
+  functions/api/  Edge Function with the /v1 endpoints (validator tests in __tests__)
 scripts/          catalogue import and seed data
 ```
 

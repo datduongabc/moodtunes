@@ -1,7 +1,9 @@
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { Appbar, Searchbar } from 'react-native-paper';
+import { MOODS, moodInfo } from '@/domain/moods';
+import { MoodChip } from '@/presentation/components/MoodChip';
 import { Screen } from '@/presentation/components/Screen';
 import { SkeletonRow, SongRow } from '@/presentation/components/SongRow';
 import { StatePanel } from '@/presentation/components/StatePanel';
@@ -9,7 +11,7 @@ import { Txt } from '@/presentation/components/Txt';
 import { color, MINI_PLAYER_SPACE, space } from '@/presentation/theme/tokens';
 import { useLibrary } from '@/presentation/viewmodels/useLibrary';
 
-/** SCR-06 Library and search (FR-02). */
+/** SCR-06 Library and search (FR-02), with the mood filter of FR-18. */
 export default function Library() {
   const vm = useLibrary();
   return (
@@ -28,6 +30,17 @@ export default function Library() {
           accessibilityLabel="Search songs or artists"
         />
       </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersWrap}
+        contentContainerStyle={styles.filters}
+        accessibilityLabel="Filter by mood"
+      >
+        {MOODS.map((m) => (
+          <MoodChip key={m.code} mood={m.code} selected={vm.mood === m.code} onPress={() => vm.toggleMood(m.code)} />
+        ))}
+      </ScrollView>
       {vm.state === 'success' ? (
         <FlashList
           data={vm.items}
@@ -36,7 +49,9 @@ export default function Library() {
           onEndReachedThreshold={0.5}
           ListHeaderComponent={
             <Txt variant="labelMedium" muted style={styles.caption}>
-              {vm.query ? `${vm.total} songs` : 'Sorted A to Z'}
+              {vm.query || vm.mood
+                ? `${vm.total} songs${vm.mood ? ` tagged ${moodInfo(vm.mood).label}` : ''}`
+                : 'Sorted A to Z'}
             </Txt>
           }
           ListFooterComponent={vm.loadingMore ? <ActivityIndicator style={styles.more} /> : null}
@@ -50,9 +65,17 @@ export default function Library() {
       {vm.state === 'empty' ? (
         <StatePanel
           icon="magnify-close"
-          title={`No results for "${vm.query}"`}
-          body="Check the spelling or try a different title or artist."
-          action="Clear search"
+          title={
+            vm.query
+              ? `No results for "${vm.query}"${vm.mood ? ` tagged ${moodInfo(vm.mood).label}` : ''}`
+              : `No songs tagged ${vm.mood ? moodInfo(vm.mood).label : ''} yet`
+          }
+          body={
+            vm.mood
+              ? 'Few songs have community tags for this mood. Try another mood or clear the filter.'
+              : 'Check the spelling or try a different title or artist.'
+          }
+          action={vm.mood ? 'Clear filters' : 'Clear search'}
           onAction={vm.clear}
           testID="search-empty"
         />
@@ -74,6 +97,8 @@ export default function Library() {
 const styles = StyleSheet.create({
   bar: { backgroundColor: color.background },
   search: { paddingHorizontal: space.margin, paddingBottom: space.tight },
+  filtersWrap: { flexGrow: 0 },
+  filters: { gap: space.tight, paddingHorizontal: space.margin, paddingBottom: space.tight },
   caption: { paddingHorizontal: space.margin, paddingVertical: space.tight },
   more: { padding: space.group },
 });

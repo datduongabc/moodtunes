@@ -15,6 +15,8 @@ export type ListeningContext = (typeof CONTEXT_CODES)[number];
 
 export type Song = {
   id: number;
+  /** Null for songs cached before the field existed. */
+  jamendoId: string | null;
   title: string;
   artistName: string;
   albumName: string | null;
@@ -46,18 +48,19 @@ export type Recommendations = {
 export type ChartEntry = { rank: number; votes: number; previousRank: number | null; myVote: boolean; song: Song };
 export type Chart = { mood: Mood; period: 'week'; computedAt: string | null; isSample: boolean; entries: ChartEntry[] };
 
-export type GameQuestion = { index: number; song: Song; clipStartSec: number; options: string[] };
-export type GameRound = { roundId: string; questions: GameQuestion[] };
-export type AnswerResult = {
-  correct: boolean;
-  correctArtist: string;
-  points: number;
-  streak: number;
-  totalScore: number;
-  correctCount: number;
-  finished: boolean;
+export type PomodoroPhase = 'idle' | 'focus' | 'break';
+export type PomodoroStats = { totalSessions: number; totalFocusMinutes: number; todayFocusMinutes: number };
+export type PomodoroSessionInput = {
+  /** Idempotency key generated on the device. */
+  id: string;
+  focusMin: number;
+  breakMin: number;
+  mood: Mood | null;
+  /** ISO time the focus period ended; a session sent later still counts on the right day. */
+  completedAt: string;
+  /** Start of the listener's local day, so the server counts "today" in their time zone. */
+  todayStart: string;
 };
-export type GameStats = { bestScore: number; roundsPlayed: number };
 
 export type Profile = { id: string; displayName: string; dailyGoalMin: number };
 

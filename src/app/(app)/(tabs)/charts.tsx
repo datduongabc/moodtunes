@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Appbar, Button } from 'react-native-paper';
+import { rankMovement, type RankMovement } from '@/domain/charts';
 import { MOODS } from '@/domain/moods';
 import { InfoNote } from '@/presentation/components/InfoNote';
 import { MoodChip } from '@/presentation/components/MoodChip';
@@ -76,11 +77,7 @@ export default function Charts() {
                 song={item.song}
                 onPress={() => void vm.playAll(index)}
                 subtitle={`${item.song.artistName} · ${item.votes} votes`}
-                leading={
-                  <Txt variant="titleMedium" style={styles.rank}>
-                    {item.rank}
-                  </Txt>
-                }
+                leading={<RankCell rank={item.rank} movement={rankMovement(item.rank, item.previousRank)} />}
                 trailing={
                   <Button
                     compact
@@ -122,6 +119,40 @@ export default function Charts() {
   );
 }
 
+const MOVEMENT_ICON: Record<RankMovement['kind'], { icon: 'arrow-up' | 'arrow-down' | 'minus' | null; tone: string }> =
+  {
+    up: { icon: 'arrow-up', tone: color.success },
+    down: { icon: 'arrow-down', tone: color.error },
+    same: { icon: 'minus', tone: color.onSurfaceVariant },
+    new: { icon: null, tone: color.primary },
+  };
+
+/** Rank with its movement since the previous snapshot (FR-13); the label is read by TalkBack. */
+function RankCell({ rank, movement }: { rank: number; movement: RankMovement }) {
+  const { icon, tone } = MOVEMENT_ICON[movement.kind];
+  return (
+    <View style={styles.rankCell} accessible accessibilityLabel={`Rank ${rank}, ${movement.label}`}>
+      <Txt variant="titleMedium" style={styles.rank}>
+        {rank}
+      </Txt>
+      {icon ? (
+        <View style={styles.movement}>
+          <MaterialCommunityIcons name={icon} size={12} color={tone} />
+          {movement.kind === 'up' || movement.kind === 'down' ? (
+            <Txt variant="labelSmall" style={{ color: tone }}>
+              {movement.by}
+            </Txt>
+          ) : null}
+        </View>
+      ) : (
+        <Txt variant="labelSmall" style={{ color: tone }}>
+          NEW
+        </Txt>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   bar: { backgroundColor: color.background },
@@ -137,6 +168,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rank: { width: 24, textAlign: 'center' },
+  rankCell: { width: 32, alignItems: 'center' },
+  rank: { textAlign: 'center' },
+  movement: { flexDirection: 'row', alignItems: 'center' },
   updated: { textAlign: 'center', padding: space.group },
 });

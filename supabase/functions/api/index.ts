@@ -2,7 +2,16 @@
 import { Hono, type Context as HonoContext } from 'hono';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { ApiError, fromDbError } from './errors.ts';
-import { isContext, isMood, isUuid, parseId } from './validate.ts';
+import {
+  isBreakMin,
+  isContext,
+  isFocusMin,
+  isMood,
+  isUuid,
+  parseCompletedAt,
+  parseId,
+  parseTodayStart,
+} from './validate.ts';
 
 type Env = { Variables: { userId: string; requestId: string } };
 
@@ -11,10 +20,11 @@ const admin: SupabaseClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.e
 });
 
 const SONG_COLUMNS =
-  'id, title, artist_name, album_name, duration_sec, audio_url, image_url, license_name, license_url';
+  'id, jamendo_id, title, artist_name, album_name, duration_sec, audio_url, image_url, license_name, license_url';
 
 type SongRow = {
   id: number;
+  jamendo_id: string;
   title: string;
   artist_name: string;
   album_name: string | null;
@@ -27,6 +37,7 @@ type SongRow = {
 
 const toSong = (s: SongRow) => ({
   id: s.id,
+  jamendoId: s.jamendo_id,
   title: s.title,
   artistName: s.artist_name,
   albumName: s.album_name,
@@ -44,7 +55,7 @@ async function songsById(ids: number[]): Promise<Map<number, ReturnType<typeof t
   return new Map((data as SongRow[]).map((s) => [s.id, toSong(s)]));
 }
 
-async function rateLimit(userId: string, action: 'tag' | 'game_round', limit: number, window: string) {
+async function rateLimit(userId: string, action: 'tag', limit: number, window: string) {
   const { data, error } = await admin.rpc('check_rate', {
     p_user: userId,
     p_action: action,
@@ -53,11 +64,7 @@ async function rateLimit(userId: string, action: 'tag' | 'game_round', limit: nu
   });
   if (error) throw fromDbError(error);
   if ((data as number) > 0) {
-    throw new ApiError(
-      'RATE_LIMITED',
-      action === 'tag' ? 'Too many tags at once. Try again in a minute' : 'Too many rounds. Try again later',
-      { retryAfterSec: data },
-    );
+    throw new ApiError('RATE_LIMITED', 'Too many tags at once. Try again in a minute', { retryAfterSec: data });
   }
 }
 
@@ -222,68 +229,73 @@ app.get('/v1/charts/:mood', async (c) => {
   });
 });
 
-// API-11 start a round
-app.post('/v1/game-rounds', async (c) => {
-  const userId = c.get('userId');
-  await rateLimit(userId, 'game_round', 10, '1 hour');
-  const { data: roundId, error } = await admin.rpc('start_round', { p_user: userId });
-  if (error) throw fromDbError(error);
-  const { data: qs, error: e2 } = await admin
-    .from('game_questions')
-    .select('idx, song_id, options, clip_start_sec')
-    .eq('round_id', roundId)
-    .order('idx');
-  if (e2) throw fromDbError(e2);
-  const songs = await songsById(qs.map((q) => q.song_id as number));
-  return c.json(
-    {
-      roundId,
-      questions: qs.map((q) => ({
-        index: q.idx,
-        song: songs.get(q.song_id),
-        clipStartSec: q.clip_start_sec,
-        options: q.options,
-      })),
-    },
-    201,
-  );
-});
-
-// API-12 answer a question (idempotent for the same answer)
-app.put('/v1/game-rounds/:roundId/answers/:index', async (c) => {
-  const roundId = c.req.param('roundId');
-  const index = Number(c.req.param('index'));
-  if (!isUuid(roundId)) throw new ApiError('NOT_FOUND', 'Round not found');
-  if (!Number.isInteger(index) || index < 0 || index > 9) {
-    throw new ApiError('VALIDATION_ERROR', 'Index must be 0 to 9', { field: 'index' });
+/** "Today" starts at the caller's local midnight; a UTC midnight would put 0:00 to 7:00 in Vietnam on the previous day. */
+function todayStartFrom(v: unknown): Date {
+  const parsed = parseTodayStart(v, Date.now());
+  if (!parsed) {
+    throw new ApiError('VALIDATION_ERROR', 'todayStart must be the start of your local day', { field: 'todayStart' });
   }
+  return parsed;
+}
+
+async function pomodoroStatsFor(userId: string, todayStart: Date) {
+  const { data, error } = await admin.from('pomodoro_sessions').select('focus_min, completed_at').eq('user_id', userId);
+  if (error) throw fromDbError(error);
+  const todayMs = todayStart.getTime();
+  let totalFocusMinutes = 0;
+  let todayFocusMinutes = 0;
+  for (const row of data) {
+    const mins = row.focus_min as number;
+    totalFocusMinutes += mins;
+    // compare instants, not strings: Postgres returns "+00:00" offsets, not the "Z" of toISOString()
+    if (Date.parse(row.completed_at as string) >= todayMs) todayFocusMinutes += mins;
+  }
+  return { totalSessions: data.length, totalFocusMinutes, todayFocusMinutes };
+}
+
+// API-11 record a completed Pomodoro focus session
+app.post('/v1/pomodoro-sessions', async (c) => {
   const body = await readJson(c);
-  const artist = body.artist ?? null;
-  if (artist !== null && (typeof artist !== 'string' || artist.trim().length === 0)) {
-    throw new ApiError('VALIDATION_ERROR', 'Invalid artist', { field: 'artist' });
+  const focusMin = body.focusMin;
+  const breakMin = body.breakMin;
+  const mood = body.mood ?? null;
+  const todayStart = todayStartFrom(body.todayStart);
+  if (!isUuid(body.id)) {
+    throw new ApiError('VALIDATION_ERROR', 'id must be a UUID generated by the device', { field: 'id' });
   }
-  const { data, error } = await admin.rpc('answer_question', {
-    p_user: c.get('userId'),
-    p_round: roundId,
-    p_idx: index,
-    p_artist: artist,
-  });
+  const completedAt = parseCompletedAt(body.completedAt, Date.now());
+  if (!completedAt) {
+    throw new ApiError('VALIDATION_ERROR', 'completedAt must be within the last 30 days', { field: 'completedAt' });
+  }
+  if (!isFocusMin(focusMin)) {
+    throw new ApiError('VALIDATION_ERROR', 'Focus duration must be 5 to 120 minutes', { field: 'focusMin' });
+  }
+  if (!isBreakMin(breakMin)) {
+    throw new ApiError('VALIDATION_ERROR', 'Break duration must be 1 to 30 minutes', { field: 'breakMin' });
+  }
+  if (mood !== null && !isMood(mood)) {
+    throw new ApiError('VALIDATION_ERROR', 'Unknown mood', { field: 'mood' });
+  }
+  const userId = c.get('userId');
+  // the device may resend a session after a lost response; the same id is then ignored
+  const { error } = await admin.from('pomodoro_sessions').upsert(
+    {
+      id: body.id,
+      user_id: userId,
+      focus_min: focusMin,
+      break_min: breakMin,
+      mood,
+      completed_at: completedAt.toISOString(),
+    },
+    { onConflict: 'id', ignoreDuplicates: true },
+  );
   if (error) throw fromDbError(error);
-  return c.json(data);
+  return c.json(await pomodoroStatsFor(userId, todayStart), 201);
 });
 
-// API-13 game statistics
-app.get('/v1/me/game-stats', async (c) => {
-  const { data, error } = await admin
-    .from('game_rounds')
-    .select('score')
-    .eq('user_id', c.get('userId'))
-    .eq('status', 'finished');
-  if (error) throw fromDbError(error);
-  return c.json({
-    bestScore: data.reduce((m, r) => Math.max(m, r.score as number), 0),
-    roundsPlayed: data.length,
-  });
+// API-12 Pomodoro focus statistics
+app.get('/v1/me/pomodoro-stats', async (c) => {
+  return c.json(await pomodoroStatsFor(c.get('userId'), todayStartFrom(c.req.query('todayStart'))));
 });
 
 // API-14 check-in

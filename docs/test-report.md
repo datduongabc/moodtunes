@@ -1,32 +1,37 @@
-# MoodTunes — Test Report (Assignment 02)
+# MoodTunes - Test Report (Assignment 02)
 
-This document records the automated test results and the manual test cases mapped to the Assignment 01 acceptance criteria (`AC-01` to `AC-11`, plus `AC-19` onboarding) to satisfy **Rubric Criterion 2.5 (Testing)**.
+This document records the automated test results and the manual test cases mapped to the Assignment 01 acceptance criteria (`AC-01` to `AC-12`, plus the Should-have criteria `AC-13`, `AC-14`, `AC-18` and `AC-19`) to satisfy **Rubric Criterion 2.5 (Testing)**.
 
 ---
 
 ## 1. Automated Verification Results
 
-Executed against `moodtunes` (`HEAD` commit `f42cf74`):
+Executed on branch `feat/focus-sharing-should-haves` on 2026-11-15:
 
 | Check | Command | Scope | Result |
 | :--- | :--- | :--- | :--- |
 | TypeScript | `npm run typecheck` (`tsc --noEmit`) | Entire `src/` codebase | **Pass** (0 errors) |
 | ESLint | `npx eslint .` | `src/` and `scripts/` | **Pass** (0 errors) |
 | Prettier | `npm run format:check` | `src/`, `scripts/`, `supabase/functions/` | **Pass** |
-| Domain Unit Tests | `npm run test:coverage` (`jest --coverage`) | `src/domain/` (7 suites, 26 tests) | **Pass** (26/26 passed) |
+| Unit Tests | `npm run test:coverage` (`jest --coverage`) | `src/domain/` and the Edge Function validators in `supabase/functions/api/__tests__/` (11 suites, 49 tests) | **Pass** (49/49 passed) |
 
 ### Domain Layer Coverage (`npm run test:coverage`)
 
 | File | % Stmts | % Branch | % Funcs | % Lines | Covered Behaviour |
 | :--- | :---: | :---: | :---: | :---: | :--- |
 | `domain/battery.ts` | 97.36 | 95.65 | 100 | 100 | Listening goal bounds (`30–480` min), level thresholds (`20%`, `0%`), midnight reset |
+| `domain/charts.ts` | 100 | 100 | 100 | 100 | Rank movement: up, down, unchanged and New (`AC-13.1.1`) |
 | `domain/checkin.ts` | 100 | 100 | 100 | 100 | 30-minute background threshold, playback suppression, time-of-day greeting |
 | `domain/diary.ts` | 100 | 100 | 100 | 100 | Day grouping, mood filtering, reverse-chronological sort |
-| `domain/game.ts` | 100 | 100 | 100 | 100 | Streak scoring (`100 + 20*(k-1)`), max 1,900, normal/extended timer (20s/40s) |
+| `domain/pomodoro.ts` | 100 | 100 | 100 | 100 | Duration clamping (`5–120`, `1–30`), `MM:SS` formatting, timestamp countdown, phase transitions, late deadline detection, local day boundaries, statistics with queued sessions, idempotency key format |
+| `domain/share.ts` | 100 | 100 | 100 | 100 | Song share message formatting (title, artist, moods), Jamendo track page link with fallback |
 | `domain/outbox.ts` | 100 | 100 | 100 | 100 | Coalescing repeated offline toggles on the same `(songId, mood)` |
+| `domain/stats.ts` | 100 | 83.33 | 100 | 100 | Monday week start, month start, mood shares sorted by count (`AC-14.1.1`) |
 | `domain/recommendations.ts` | 100 | 100 | 100 | 100 | Demoting songs played within the last 2 hours |
 | `domain/usecases/toggleTag.ts` | 100 | 95.23 | 100 | 100 | Optimistic toggle, online/offline outbox queuing |
-| **All files (`src/domain/`)** | **92.23** | **94.2** | **93.54** | **93.9** | Exceeds NFR-MAINT-01 (≥ 70% domain coverage) |
+| **All files (`src/domain/`)** | **98.22** | **96** | **100** | **98.55** | Exceeds NFR-MAINT-01 (≥ 70% domain coverage) |
+
+The Edge Function validators (`isUuid`, duration ranges, `parseTodayStart`, `parseCompletedAt`) are covered by `supabase/functions/api/__tests__/validate.test.ts`. The API contract is in `docs/openapi.yaml`; `docs/moodtunes.postman_collection.json` runs every endpoint with status assertions and the 800 ms check of NFR-PERF-04 on API-06 and API-10.
 
 ---
 
@@ -120,11 +125,29 @@ Executed against `moodtunes` (`HEAD` commit `f42cf74`):
 | TC-40 | AC-10.1.2–3 | SCR-09/11 | Add or remove a tag while offline, then turn network back on. | Shows *"Waiting to sync"* offline; syncs in order within 10s online without duplicates. | Pending |
 | TC-41 | AC-10.1.4 | SCR-09 | Toggle the same `(song, mood)` multiple times offline, then reconnect. | Only the final state is sent to the server. | Pending |
 
-### FR-11: Artist Guess Game
+### FR-11: Song Sharing (Facebook / Share Sheet)
 
 | TC ID | AC ID | Screen | Test Steps | Expected Result | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| TC-42 | AC-11.1.1–2 | SCR-14 | Tap `Start game` on Game tab. | 10-question round starts; plays 15s clip; shows 4 distinct artist options. | Pending |
-| TC-43 | AC-11.1.3–4 | SCR-14 | Answer a question within 20s (or 40s with Extended answer time). | Within 1s shows correct/incorrect, points (`100 + 20*(k-1)`), song title, and `artist_name`. | Pending |
-| TC-44 | AC-11.1.5 | SCR-13/14/16 | Complete all 10 questions. | Summary shows total score, correct count, and personal best (also updated in Profile). | Pending |
-| TC-45 | AC-11.1.6 | SCR-13 | Turn off network and open Game tab. | Shows *"You're offline"* message explaining answers are checked online + `Try again`. | Pending |
+| TC-42 | AC-11.1.1 | SCR-07 | Play a song and tap the Share icon on Now Playing. | Native Share Sheet opens with song title, artist, tagged mood(s), and track URL (selectable for Facebook). | Pending |
+| TC-43 | AC-11.1.2 | Song Info | Open `⋮` Song Info and tap `Share song`. | Native Share Sheet opens with the same formatted song payload. | Pending |
+| TC-49 | AC-11.1.1 | SCR-07 | Share a song to Facebook Messenger or Notes and open the link. | The link opens the song's Jamendo page, not an MP3 file. | Pending |
+
+### FR-12: Pomodoro Focus + Music Mode
+
+| TC ID | AC ID | Screen | Test Steps | Expected Result | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| TC-44 | AC-12.1.1 | SCR-13 | Open Focus tab, choose `25 / 5` or `50 / 10` or `Custom` (`5–120` / `1–30` min), pick a mood, and tap `Start Focus`. | Focus timer counts down in `MM:SS` and automatically starts playing the selected mood mix. | Pending |
+| TC-45 | AC-12.1.2 | SCR-13 | Tap `Pause`, `Resume`, `Break`, or `Reset` during an active Focus session. | Timer and music playback pause/resume/reset together smoothly. | Pending |
+| TC-46 | AC-12.1.3 | SCR-13/16 | Let a Focus timer reach `00:00`. | Music pauses automatically, device vibrates, Break timer starts, and `Focus minutes` updates in Profile (`SCR-16`). | Pending |
+| TC-47 | AC-12.1.3 | SCR-13 | Start a 5-minute Focus session, lock the phone, and wait 6 minutes. | Music stops at the end of Focus while the screen is off; on unlocking, the Break countdown shows about 4 minutes left. | Pending |
+| TC-48 | AC-12.1.4 | SCR-13/16 | Turn off the network, complete a 5-minute Focus session, then check the Focus tab and Profile. | `Focused today` and `Focus minutes` include the offline session; around 00:30 local time, a session completed after midnight counts as today. | Pending |
+| TC-50 | AC-12.1.4 | SCR-13/16 | Complete a Focus session offline, close the app, turn the network on and reopen the app. | The session is sent once; Profile shows the same minutes as before (no double count), also after pulling to refresh. | Pending |
+
+### Should-have: FR-13 Rank Movement, FR-14 Mood Statistics, FR-18 Search by Mood
+
+| TC ID | AC ID | Screen | Test Steps | Expected Result | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| TC-51 | AC-13.1.1 | SCR-10 | Open a chart that has a previous snapshot. | Each row shows an up or down arrow with the number of places, a dash when unchanged, or `NEW`; TalkBack reads "Rank 3, Up 2". | Pending |
+| TC-52 | AC-14.1.1 | Diary, Mood statistics | Tag songs with several moods, open Diary and tap the statistics icon; switch between `This week` and `This month`. | Each mood shows its share of my tags for the period, largest first; with no tags the empty state is shown. | Pending |
+| TC-53 | AC-18.1.1 | SCR-06 | Open Library, select the `Focused` chip, then type a search term. | Only songs with community `Focused` tags are listed, also combined with the search term; tapping the chip again clears the filter. | Pending |

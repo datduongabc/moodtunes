@@ -18,6 +18,12 @@ export default function Diary() {
     <Screen offlineText={vm.offlineText}>
       <Appbar.Header style={styles.bar}>
         <Appbar.Content title="Mood diary" />
+        <Appbar.Action
+          icon="chart-donut"
+          onPress={() => router.push('/stats')}
+          accessibilityLabel="Mood statistics"
+          testID="open-stats"
+        />
       </Appbar.Header>
       {vm.state !== 'empty' ? (
         <ScrollView

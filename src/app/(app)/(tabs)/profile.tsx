@@ -2,18 +2,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Appbar, Button, Dialog, List, Portal, Switch, TextInput } from 'react-native-paper';
+import { Appbar, Button, Dialog, List, Portal, TextInput } from 'react-native-paper';
 import { minutesLabel } from '@/core/time';
-import {
-  useDeleteAccountMutation,
-  useDiaryQuery,
-  useGameStatsQuery,
-  useProfileQuery,
-  useUpdateProfileMutation,
-} from '@/data/remote/api';
+import { useDeleteAccountMutation, useDiaryQuery, useProfileQuery, useUpdateProfileMutation } from '@/data/remote/api';
 import { Screen } from '@/presentation/components/Screen';
 import { Txt } from '@/presentation/components/Txt';
 import { color, MINI_PLAYER_SPACE, radius, space, tint } from '@/presentation/theme/tokens';
+import { usePomodoroStats } from '@/presentation/viewmodels/usePomodoroStats';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { signOut } from '@/store/services';
 import { uiActions } from '@/store/uiSlice';
@@ -31,10 +26,9 @@ export default function Profile() {
   const dispatch = useAppDispatch();
   const uid = useAppSelector((s) => s.session.userId)!;
   const email = useAppSelector((s) => s.session.email);
-  const extended = useAppSelector((s) => s.ui.extendedAnswerTime);
   const goal = useAppSelector((s) => s.battery.goalMin);
   const { data: profile } = useProfileQuery(uid);
-  const { data: stats } = useGameStatsQuery();
+  const stats = usePomodoroStats();
   const { data: diary } = useDiaryQuery();
   const [update] = useUpdateProfileMutation();
   const [deleteAccount, del] = useDeleteAccountMutation();
@@ -82,7 +76,7 @@ export default function Profile() {
           <View style={styles.stats}>
             {(
               [
-                ['trophy-outline', (stats?.bestScore ?? 0).toLocaleString('en-US'), 'Best score'],
+                ['timer-outline', `${stats.totalFocusMinutes}m`, 'Focus minutes'],
                 ['tag-outline', String(diary?.entries.length ?? 0), 'Mood tags'],
               ] as const
             ).map(([icon, value, label]) => (
@@ -105,21 +99,6 @@ export default function Profile() {
             left={(p) => <List.Icon {...p} icon="timer-outline" />}
             right={(p) => <List.Icon {...p} icon="chevron-right" />}
             onPress={() => router.push('/battery')}
-          />
-          <List.Item
-            title="Extended answer time"
-            description={`Game answer time: ${extended ? 40 : 20} seconds`}
-            left={(p) => <List.Icon {...p} icon="gamepad-variant-outline" />}
-            right={() => (
-              <Switch
-                value={extended}
-                onValueChange={(v) => {
-                  dispatch(uiActions.extendedAnswerTime(v));
-                }}
-                accessibilityLabel="Extended answer time"
-              />
-            )}
-            onPress={() => dispatch(uiActions.extendedAnswerTime(!extended))}
           />
         </List.Section>
 

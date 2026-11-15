@@ -39,10 +39,7 @@ export default function TabsLayout() {
       >
         <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('home-outline', 'home') }} />
         <Tabs.Screen name="charts" options={{ title: 'Charts', tabBarIcon: icon('chart-bar', 'chart-bar') }} />
-        <Tabs.Screen
-          name="game"
-          options={{ title: 'Game', tabBarIcon: icon('gamepad-variant-outline', 'gamepad-variant') }}
-        />
+        <Tabs.Screen name="pomodoro" options={{ title: 'Focus', tabBarIcon: icon('timer-outline', 'timer') }} />
         <Tabs.Screen name="diary" options={{ title: 'Diary', tabBarIcon: icon('book-outline', 'book') }} />
         <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: icon('account-outline', 'account') }} />
       </Tabs>

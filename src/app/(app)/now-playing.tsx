@@ -13,6 +13,7 @@ import { StatePanel } from '@/presentation/components/StatePanel';
 import { Txt } from '@/presentation/components/Txt';
 import { color, radius, space, tint } from '@/presentation/theme/tokens';
 import { useNowPlaying } from '@/presentation/viewmodels/useNowPlaying';
+import { shareSong } from '@/store/services';
 
 /** SCR-07 Now Playing (FR-03). */
 export default function NowPlaying() {
@@ -119,7 +120,15 @@ export default function NowPlaying() {
           <Button mode="contained-tonal" icon="tag-outline" onPress={() => router.push('/tag-sheet')} testID="tag-mood">
             Tag mood
           </Button>
-          <IconButton icon="playlist-music" onPress={() => router.push('/queue')} accessibilityLabel="Queue" />
+          <View style={styles.actionsRight}>
+            <IconButton
+              icon="share-variant"
+              onPress={() => void shareSong(vm.song!, vm.myMoods)}
+              accessibilityLabel="Share song"
+              testID="share-song"
+            />
+            <IconButton icon="playlist-music" onPress={() => router.push('/queue')} accessibilityLabel="Queue" />
+          </View>
         </View>
       </ScrollView>
     </Screen>
@@ -154,4 +163,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  actionsRight: { flexDirection: 'row', alignItems: 'center' },
 });

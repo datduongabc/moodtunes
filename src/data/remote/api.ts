@@ -4,13 +4,12 @@ import { isOfflineError, type AppError } from '@/core/errors';
 import { http, type HttpRequest } from '@/core/http';
 import { cacheGet, cacheKeys, cachePut } from '@/data/local/cache';
 import type {
-  AnswerResult,
   Chart,
   DiaryEntry,
-  GameRound,
-  GameStats,
   ListeningContext,
   Mood,
+  PomodoroSessionInput,
+  PomodoroStats,
   Profile,
   Recommendations,
   Song,
@@ -48,29 +47,34 @@ export const PAGE_SIZE = 20;
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Chart', 'Diary', 'Recs', 'Profile', 'GameStats'],
+  tagTypes: ['Chart', 'Diary', 'Recs', 'Profile', 'PomodoroStats'],
   endpoints: (b) => ({
-    // API-04 search and browse
-    songs: b.query<{ items: Song[]; total: number; offset: number }, { q: string; offset: number }>({
-      async queryFn({ q, offset }) {
-        const term = q.trim().replace(/[,()*]/g, ' ');
-        const filter = term.length >= 2 ? `&or=(title.ilike.*${enc(term)}*,artist_name.ilike.*${enc(term)}*)` : '';
-        const res = await http<SongRow[]>({
-          url: `${restBaseUrl()}/songs?select=*&order=title.asc,id.asc&limit=${PAGE_SIZE}&offset=${offset}${filter}`,
-          headers: { Prefer: 'count=exact' },
-        });
-        if ('error' in res) return { error: res.error };
-        const total = Number(res.headers.get('content-range')?.split('/')[1] ?? res.data.length);
-        return { data: { items: res.data.map(songFromRow), total, offset } };
+    // API-04 search and browse; FR-18 optional mood filter on community tags (song_mood_stats)
+    songs: b.query<{ items: Song[]; total: number; offset: number }, { q: string; offset: number; mood?: Mood | null }>(
+      {
+        async queryFn({ q, offset, mood }) {
+          const term = q.trim().replace(/[,()*]/g, ' ');
+          const filter = term.length >= 2 ? `&or=(title.ilike.*${enc(term)}*,artist_name.ilike.*${enc(term)}*)` : '';
+          // an inner embed keeps only songs that the community has tagged with the mood
+          const select = mood ? `*,song_mood_stats!inner(mood_code)&song_mood_stats.mood_code=eq.${mood}` : '*';
+          const res = await http<SongRow[]>({
+            url: `${restBaseUrl()}/songs?select=${select}&order=title.asc,id.asc&limit=${PAGE_SIZE}&offset=${offset}${filter}`,
+            headers: { Prefer: 'count=exact' },
+          });
+          if ('error' in res) return { error: res.error };
+          const total = Number(res.headers.get('content-range')?.split('/')[1] ?? res.data.length);
+          return { data: { items: res.data.map(songFromRow), total, offset } };
+        },
+        serializeQueryArgs: ({ queryArgs }) => `${queryArgs.q.trim().toLowerCase()}|${queryArgs.mood ?? ''}`,
+        merge: (cache, page) => {
+          if (page.offset === 0) return page;
+          const seen = new Set(cache.items.map((s) => s.id));
+          return { ...page, items: [...cache.items, ...page.items.filter((s) => !seen.has(s.id))] };
+        },
+        forceRefetch: ({ currentArg, previousArg }) =>
+          currentArg?.offset !== previousArg?.offset || currentArg?.mood !== previousArg?.mood,
       },
-      serializeQueryArgs: ({ queryArgs }) => queryArgs.q.trim().toLowerCase(),
-      merge: (cache, page) => {
-        if (page.offset === 0) return page;
-        const seen = new Set(cache.items.map((s) => s.id));
-        return { ...page, items: [...cache.items, ...page.items.filter((s) => !seen.has(s.id))] };
-      },
-      forceRefetch: ({ currentArg, previousArg }) => currentArg?.offset !== previousArg?.offset,
-    }),
+    ),
 
     // API-06 recommendations
     recommendations: b.query<WithSource<Recommendations>, { mood: Mood; context: ListeningContext | null }>({
@@ -161,21 +165,16 @@ export const api = createApi({
       query: (body) => ({ url: `${apiBaseUrl()}/checkins`, method: 'POST', body }),
     }),
 
-    // API-11..13 game
-    startRound: b.mutation<GameRound, void>({
-      query: () => ({ url: `${apiBaseUrl()}/game-rounds`, method: 'POST', body: {} }),
+    // API-11..12 Pomodoro focus sessions & statistics
+    completePomodoroSession: b.mutation<PomodoroStats, PomodoroSessionInput>({
+      query: (body) => ({ url: `${apiBaseUrl()}/pomodoro-sessions`, method: 'POST', body }),
+      invalidatesTags: ['PomodoroStats'],
     }),
-    answer: b.mutation<AnswerResult, { roundId: string; index: number; artist: string | null }>({
-      query: ({ roundId, index, artist }) => ({
-        url: `${apiBaseUrl()}/game-rounds/${roundId}/answers/${index}`,
-        method: 'PUT',
-        body: { artist },
+    pomodoroStats: b.query<PomodoroStats, { todayStart: string }>({
+      query: ({ todayStart }) => ({
+        url: `${apiBaseUrl()}/me/pomodoro-stats?todayStart=${encodeURIComponent(todayStart)}`,
       }),
-      invalidatesTags: (r) => (r?.finished ? ['GameStats'] : []),
-    }),
-    gameStats: b.query<GameStats, void>({
-      query: () => ({ url: `${apiBaseUrl()}/me/game-stats` }),
-      providesTags: ['GameStats'],
+      providesTags: ['PomodoroStats'],
     }),
 
     // API-15 delete account
@@ -188,14 +187,14 @@ export const api = createApi({
 export const {
   useSongsQuery,
   useRecommendationsQuery,
+  useLazyRecommendationsQuery,
   useChartQuery,
   useDiaryQuery,
   useProfileQuery,
   useUpdateProfileMutation,
   useSongMoodsQuery,
   useCheckInMutation,
-  useStartRoundMutation,
-  useAnswerMutation,
-  useGameStatsQuery,
+  useCompletePomodoroSessionMutation,
+  usePomodoroStatsQuery,
   useDeleteAccountMutation,
 } = api;
