@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ViewState } from '@/domain/types';
+import { moodInfo } from '@/domain/moods';
+import type { Mood, ViewState } from '@/domain/types';
 import { useSongsQuery } from '@/data/remote/api';
 import { useAppSelector } from '@/store';
 import { playSongs } from '@/store/services';
@@ -11,6 +12,7 @@ export function useLibrary() {
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
+  const [mood, setMoodState] = useState<Mood | null>(null);
   const online = useAppSelector((s) => s.network.online);
   const currentId = useAppSelector((s) => s.player.queue[s.player.index]?.id);
 
@@ -23,7 +25,7 @@ export function useLibrary() {
     return () => clearTimeout(t);
   }, [text]);
 
-  const res = useSongsQuery({ q: query, offset });
+  const res = useSongsQuery({ q: query, offset, mood });
   const items = res.data?.items ?? [];
   const total = res.data?.total ?? 0;
 
@@ -36,6 +38,12 @@ export function useLibrary() {
     text,
     setText,
     query,
+    mood,
+    /** Tapping the selected mood again clears the filter (FR-18). */
+    toggleMood: (m: Mood) => {
+      setMoodState((cur) => (cur === m ? null : m));
+      setOffset(0);
+    },
     items,
     total,
     state,
@@ -45,7 +53,16 @@ export function useLibrary() {
       if (!res.isFetching && items.length < total) setOffset(items.length);
     },
     retry: () => void res.refetch(),
-    clear: () => setText(''),
-    play: (i: number) => playSongs(items, i, query ? `Search: ${query}` : 'Library'),
+    clear: () => {
+      setText('');
+      setMoodState(null);
+      setOffset(0);
+    },
+    play: (i: number) =>
+      playSongs(
+        items,
+        i,
+        [query ? `Search: ${query}` : 'Library', mood ? moodInfo(mood).label : null].filter(Boolean).join(' · '),
+      ),
   };
 }

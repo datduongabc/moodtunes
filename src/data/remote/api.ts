@@ -49,27 +49,32 @@ export const api = createApi({
   baseQuery,
   tagTypes: ['Chart', 'Diary', 'Recs', 'Profile', 'PomodoroStats'],
   endpoints: (b) => ({
-    // API-04 search and browse
-    songs: b.query<{ items: Song[]; total: number; offset: number }, { q: string; offset: number }>({
-      async queryFn({ q, offset }) {
-        const term = q.trim().replace(/[,()*]/g, ' ');
-        const filter = term.length >= 2 ? `&or=(title.ilike.*${enc(term)}*,artist_name.ilike.*${enc(term)}*)` : '';
-        const res = await http<SongRow[]>({
-          url: `${restBaseUrl()}/songs?select=*&order=title.asc,id.asc&limit=${PAGE_SIZE}&offset=${offset}${filter}`,
-          headers: { Prefer: 'count=exact' },
-        });
-        if ('error' in res) return { error: res.error };
-        const total = Number(res.headers.get('content-range')?.split('/')[1] ?? res.data.length);
-        return { data: { items: res.data.map(songFromRow), total, offset } };
+    // API-04 search and browse; FR-18 optional mood filter on community tags (song_mood_stats)
+    songs: b.query<{ items: Song[]; total: number; offset: number }, { q: string; offset: number; mood?: Mood | null }>(
+      {
+        async queryFn({ q, offset, mood }) {
+          const term = q.trim().replace(/[,()*]/g, ' ');
+          const filter = term.length >= 2 ? `&or=(title.ilike.*${enc(term)}*,artist_name.ilike.*${enc(term)}*)` : '';
+          // an inner embed keeps only songs that the community has tagged with the mood
+          const select = mood ? `*,song_mood_stats!inner(mood_code)&song_mood_stats.mood_code=eq.${mood}` : '*';
+          const res = await http<SongRow[]>({
+            url: `${restBaseUrl()}/songs?select=${select}&order=title.asc,id.asc&limit=${PAGE_SIZE}&offset=${offset}${filter}`,
+            headers: { Prefer: 'count=exact' },
+          });
+          if ('error' in res) return { error: res.error };
+          const total = Number(res.headers.get('content-range')?.split('/')[1] ?? res.data.length);
+          return { data: { items: res.data.map(songFromRow), total, offset } };
+        },
+        serializeQueryArgs: ({ queryArgs }) => `${queryArgs.q.trim().toLowerCase()}|${queryArgs.mood ?? ''}`,
+        merge: (cache, page) => {
+          if (page.offset === 0) return page;
+          const seen = new Set(cache.items.map((s) => s.id));
+          return { ...page, items: [...cache.items, ...page.items.filter((s) => !seen.has(s.id))] };
+        },
+        forceRefetch: ({ currentArg, previousArg }) =>
+          currentArg?.offset !== previousArg?.offset || currentArg?.mood !== previousArg?.mood,
       },
-      serializeQueryArgs: ({ queryArgs }) => queryArgs.q.trim().toLowerCase(),
-      merge: (cache, page) => {
-        if (page.offset === 0) return page;
-        const seen = new Set(cache.items.map((s) => s.id));
-        return { ...page, items: [...cache.items, ...page.items.filter((s) => !seen.has(s.id))] };
-      },
-      forceRefetch: ({ currentArg, previousArg }) => currentArg?.offset !== previousArg?.offset,
-    }),
+    ),
 
     // API-06 recommendations
     recommendations: b.query<WithSource<Recommendations>, { mood: Mood; context: ListeningContext | null }>({
