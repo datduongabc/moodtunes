@@ -2,6 +2,7 @@ import type { DiaryEntry, ListeningContext, Mood, Profile, Song } from '@/domain
 
 export type SongRow = {
   id: number;
+  jamendo_id?: string | null;
   title: string;
   artist_name: string;
   album_name: string | null;
@@ -14,6 +15,7 @@ export type SongRow = {
 
 export const songFromRow = (r: SongRow): Song => ({
   id: r.id,
+  jamendoId: r.jamendo_id ?? null,
   title: r.title,
   artistName: r.artist_name,
   albumName: r.album_name,

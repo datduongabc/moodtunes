@@ -11,7 +11,6 @@ export const isOfflineError = (e: AppError) => e.status === 'NETWORK' || e.statu
 const FRIENDLY: Record<string, string> = {
   RATE_LIMITED: 'Too many tags at once. Try again in a minute',
   NOT_FOUND: 'This song is no longer available',
-  NOT_ENOUGH_SONGS: 'Not enough tagged songs yet',
   INTERNAL_ERROR: 'Something went wrong. Try again',
 };
 

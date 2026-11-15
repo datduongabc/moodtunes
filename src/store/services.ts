@@ -1,9 +1,12 @@
 import NetInfo from '@react-native-community/netinfo';
-import { AppState } from 'react-native';
+import { AppState, Share, Vibration } from 'react-native';
 import * as Sentry from '@sentry/react-native';
+import type { AppError } from '@/core/errors';
 import { supabase } from '@/core/supabase';
 import * as battery from '@/domain/battery';
 import { shouldShowCheckIn } from '@/domain/checkin';
+import { dueTransition, newSessionId, startOfLocalDay, type PendingSession } from '@/domain/pomodoro';
+import { buildSongSharePayload } from '@/domain/share';
 import { makeToggleTag } from '@/domain/usecases/toggleTag';
 import type { ListeningContext, Mood, Song } from '@/domain/types';
 import { clearPersonalData } from '@/data/local/db';
@@ -17,6 +20,7 @@ import { batteryActions } from './batterySlice';
 import { moodActions } from './moodSlice';
 import { networkActions } from './networkSlice';
 import { playerActions, type PlayerState } from './playerSlice';
+import { pomodoroActions } from './pomodoroSlice';
 import { sessionActions } from './sessionSlice';
 import { tagsActions } from './tagsSlice';
 import { uiActions } from './uiSlice';
@@ -71,7 +75,7 @@ function watchThresholds(on: boolean) {
 }
 
 // ---------- persistence (NFR-LIFE-01) ----------
-const KV = { player: 'player', mood: 'mood', battery: 'battery', ui: 'ui' };
+const KV = { player: 'player', mood: 'mood', battery: 'battery', pomodoro: 'pomodoro' };
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function persistSoon() {
   if (saveTimer) return;
@@ -91,25 +95,25 @@ function persistSoon() {
       kvSet(KV.player, p),
       kvSet(KV.mood, { mood: s.mood.current, context: s.mood.context }),
       kvSet(KV.battery, s.battery),
-      kvSet(KV.ui, { extendedAnswerTime: s.ui.extendedAnswerTime }),
+      kvSet(KV.pomodoro, s.pomodoro.pending),
     ]);
   }, 1000);
 }
 
 async function restoreLocal() {
-  const [p, m, b, u] = await Promise.all([
+  const [p, m, b, focusQueue] = await Promise.all([
     kvGet<Partial<PlayerState>>(KV.player),
     kvGet<{ mood: Mood | null; context: ListeningContext | null }>(KV.mood),
     kvGet<battery.BatteryState>(KV.battery),
-    kvGet<{ extendedAnswerTime: boolean }>(KV.ui),
+    kvGet<PendingSession[]>(KV.pomodoro),
   ]);
+  if (focusQueue?.length) dispatch(pomodoroActions.pendingRestored(focusQueue));
   if (p) {
     dispatch(playerActions.restored(p));
     PlayerService.setRestored(p.queue ?? [], p.index ?? 0, p.positionSec ?? 0);
   }
   if (m) dispatch(moodActions.restored(m));
   if (b) dispatch(batteryActions.set(battery.rollOver({ ...b, playingSince: null }, Date.now())));
-  if (u) dispatch(uiActions.extendedAnswerTime(u.extendedAnswerTime));
   const pending = await listPending();
   for (const c of pending) {
     if (c.op === 'put') {
@@ -126,6 +130,91 @@ async function restoreLocal() {
   }
 }
 
+// ---------- Pomodoro (FR-12) ----------
+/**
+ * Applies a due Focus or Break transition. It lives here rather than in the screen because the
+ * screen's timer stops when the app is in the background or the tab is not mounted, while music
+ * keeps playing. The player's status events keep arriving every second during background
+ * playback, so checking on each of them pauses the music on time even with the screen off
+ * (AC-12.1.2). Without playback (break, or nothing loaded), the check runs when the app returns
+ * to the foreground, and the countdown, computed from the deadline, is already correct.
+ */
+export function checkPomodoro(now = Date.now()) {
+  const s = getState().pomodoro;
+  const due = dueTransition(s, now);
+  if (due === 'focusDone') {
+    PlayerService.pause();
+    Vibration.vibrate([0, 250, 150, 250]);
+    // the break is measured from the moment focus ended, not from when the app noticed it
+    dispatch(pomodoroActions.started({ phase: 'break', endsAtMs: s.endsAtMs! + s.breakMin * 60_000 }));
+    dispatch(uiActions.snack(`Focus complete! Enjoy a ${s.breakMin}-min break`));
+    dispatch(
+      pomodoroActions.sessionQueued({
+        id: newSessionId(),
+        focusMin: s.focusMin,
+        breakMin: s.breakMin,
+        mood: s.mood,
+        completedAt: s.endsAtMs!,
+      }),
+    );
+    void flushPomodoroSessions();
+    checkPomodoro(now); // the break may also be over already
+  } else if (due === 'breakDone') {
+    Vibration.vibrate(250);
+    dispatch(pomodoroActions.reset());
+    dispatch(uiActions.snack('Break finished! Ready for another focus session'));
+  }
+}
+
+/**
+ * Sends the queued sessions in order. A network failure stops the run and leaves the rest queued
+ * for the next trigger (reconnection, foreground, sign-in); a session the server rejects as invalid
+ * is dropped, since resending it can never succeed. The client-generated id makes a resend after a
+ * lost response harmless.
+ */
+let flushing = false;
+export async function flushPomodoroSessions() {
+  if (flushing || getState().session.status !== 'signedIn') return;
+  flushing = true;
+  try {
+    for (const p of [...getState().pomodoro.pending]) {
+      const res = await dispatch(
+        api.endpoints.completePomodoroSession.initiate({
+          id: p.id,
+          focusMin: p.focusMin,
+          breakMin: p.breakMin,
+          mood: p.mood,
+          completedAt: new Date(p.completedAt).toISOString(),
+          todayStart: startOfLocalDay(Date.now()).toISOString(),
+        }),
+      );
+      if ('error' in res) {
+        if ((res.error as AppError).status === 400) {
+          dispatch(pomodoroActions.sessionsSent([p.id]));
+          continue;
+        }
+        break;
+      }
+      dispatch(pomodoroActions.sessionsSent([p.id]));
+    }
+  } finally {
+    flushing = false;
+  }
+}
+
+export async function shareSong(song: Song, moods: Mood[]) {
+  const payload = buildSongSharePayload(song, moods);
+  try {
+    await Share.share({
+      title: payload.title,
+      message: payload.message,
+      url: payload.url,
+    });
+  } catch {
+    dispatch(uiActions.snack("Couldn't open the share sheet. Try again"));
+  }
+}
+
 // ---------- session ----------
 export async function signOut() {
   PlayerService.reset();
@@ -133,6 +222,7 @@ export async function signOut() {
   await supabase.auth.signOut({ scope: 'local' });
   await clearPersonalData(); // tokens, cache and pending outbox changes (AC-01.2.2)
   dispatch(playerActions.cleared());
+  dispatch(pomodoroActions.cleared());
   dispatch(tagsActions.cleared());
   dispatch(moodActions.cleared());
   dispatch(batteryActions.cleared());
@@ -152,6 +242,7 @@ export function startServices() {
       const listening = st.isPlaying && !st.isBuffering;
       const wasListening = prev.isPlaying && !prev.isBuffering;
       dispatch(playerActions.status(st));
+      checkPomodoro();
       if (listening !== wasListening) {
         updateBattery(listening);
         watchThresholds(listening);
@@ -168,7 +259,10 @@ export function startServices() {
     const online = s.isConnected !== false && s.isInternetReachable !== false;
     const was = getState().network.online;
     dispatch(networkActions.changed(online));
-    if (online && !was) syncEngine.kick(); // outbox first, then screens refetch (AC-10.1.3)
+    if (online && !was) {
+      syncEngine.kick(); // outbox first, then screens refetch (AC-10.1.3)
+      void flushPomodoroSessions();
+    }
   });
 
   AppState.addEventListener('change', (state) => {
@@ -189,7 +283,9 @@ export function startServices() {
         dispatch(moodActions.checkInRequired());
       dispatch(moodActions.cameForeground());
       dispatch(batteryActions.set(battery.rollOver(s.battery, now)));
+      checkPomodoro(now);
       syncEngine.kick();
+      void flushPomodoroSessions();
     }
   });
 
@@ -212,6 +308,7 @@ function onAuthChange(event: string, session: { user: { id: string; email?: stri
       dispatch(sessionActions.signedIn({ userId: user.id, email: user.email ?? null }));
       Sentry.setUser({ id: user.id }); // no email in reports (NFR-PRIV-01)
       syncEngine.kick();
+      void flushPomodoroSessions();
       void dispatch(api.endpoints.diary.initiate()); // own tags for the tag sheet
     });
   } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {

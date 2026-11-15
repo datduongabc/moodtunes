@@ -1,12 +1,5 @@
-import {
-  createAudioPlaylist,
-  createAudioPlayer,
-  setAudioModeAsync,
-  type AudioPlayer,
-  type AudioPlaylist,
-} from 'expo-audio';
+import { createAudioPlaylist, setAudioModeAsync, type AudioPlaylist } from 'expo-audio';
 import type { Song } from '@/domain/types';
-import { CLIP_SECONDS } from '@/domain/game';
 
 export type PlayerEvents = {
   onStatus: (s: {
@@ -32,8 +25,6 @@ const meta = (s: Song) => ({
  */
 class PlayerServiceImpl {
   private playlist: AudioPlaylist | null = null;
-  private clip: AudioPlayer | null = null;
-  private clipTimer: ReturnType<typeof setTimeout> | null = null;
   private songs: Song[] = [];
   private pendingRestore: { songs: Song[]; index: number; positionSec: number } | null = null;
   private events: PlayerEvents | null = null;
@@ -100,7 +91,6 @@ class PlayerServiceImpl {
     await this.ready;
     const p = this.playlist;
     if (!p || songs.length === 0) return;
-    this.stopClip();
     this.songs = songs;
     p.clear();
     for (const s of songs) p.add({ uri: s.audioUrl, name: s.title });
@@ -111,7 +101,6 @@ class PlayerServiceImpl {
   }
 
   async play() {
-    this.stopClip();
     if (this.pendingRestore) await this.ensureRestored();
     this.playlist?.play();
   }
@@ -150,26 +139,8 @@ class PlayerServiceImpl {
     this.playlist?.remove(index);
   }
 
-  /** Game clip: 15 seconds of one song, with the main playlist paused (AC-11.1.1). */
-  playClip(song: Song, startSec: number) {
-    this.playlist?.pause();
-    this.stopClip();
-    this.clip = createAudioPlayer({ uri: song.audioUrl });
-    this.clip.seekTo(startSec);
-    this.clip.play();
-    this.clipTimer = setTimeout(() => this.stopClip(), CLIP_SECONDS * 1000);
-  }
-
-  stopClip() {
-    if (this.clipTimer) clearTimeout(this.clipTimer);
-    this.clipTimer = null;
-    this.clip?.remove();
-    this.clip = null;
-  }
-
   reset() {
     this.pendingRestore = null;
-    this.stopClip();
     this.songs = [];
     this.playlist?.clear();
     this.playlist?.clearLockScreenControls();

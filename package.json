@@ -74,7 +74,8 @@
     },
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/supabase/"
+      "/supabase/migrations/",
+      "/supabase/\\.temp/"
     ],
     "collectCoverageFrom": [
       "src/domain/**/*.ts"

@@ -53,7 +53,7 @@ export function MoodChip({
   );
 }
 
-/** Large tile used on the check-in screen and in the game (8 moods in a 2-column grid). */
+/** Large tile used on the check-in screen (8 moods in a 2-column grid). */
 export function MoodTile({
   mood,
   selected,

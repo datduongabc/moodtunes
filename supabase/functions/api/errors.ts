@@ -3,8 +3,6 @@ export type ErrorCode =
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
-  | 'ALREADY_ANSWERED'
-  | 'NOT_ENOUGH_SONGS'
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR'
   | 'SERVICE_UNAVAILABLE';
@@ -14,8 +12,6 @@ const STATUS: Record<ErrorCode, number> = {
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
-  ALREADY_ANSWERED: 409,
-  NOT_ENOUGH_SONGS: 422,
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
   SERVICE_UNAVAILABLE: 503,
@@ -40,8 +36,6 @@ export function fromDbError(err: { message?: string } | null): ApiError {
   if (msg in STATUS) {
     const text: Record<string, string> = {
       NOT_FOUND: 'Not found',
-      ALREADY_ANSWERED: 'This question has already been answered',
-      NOT_ENOUGH_SONGS: 'Not enough tagged songs yet',
       VALIDATION_ERROR: 'Invalid request',
     };
     return new ApiError(msg as ErrorCode, text[msg] ?? msg);

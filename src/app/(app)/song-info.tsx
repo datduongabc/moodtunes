@@ -1,10 +1,12 @@
 import * as WebBrowser from 'expo-web-browser';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { Button } from 'react-native-paper';
 import { moodInfo } from '@/domain/moods';
 import { useSongMoodsQuery } from '@/data/remote/api';
 import { Txt } from '@/presentation/components/Txt';
 import { color, space } from '@/presentation/theme/tokens';
 import { useAppSelector } from '@/store';
+import { shareSong } from '@/store/services';
 
 /** Song info: Creative Commons attribution — title, author, source, licence (AC-03.1.4, NFR-LIC-01). */
 export default function SongInfo() {
@@ -39,6 +41,14 @@ export default function SongInfo() {
           </Txt>
         </View>
       ))}
+      <Button
+        mode="contained-tonal"
+        icon="share-variant"
+        onPress={() => void shareSong(song, moods?.map((m) => m.mood) ?? [])}
+        testID="song-info-share"
+      >
+        Share song
+      </Button>
     </ScrollView>
   );
 }

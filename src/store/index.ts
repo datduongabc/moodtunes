@@ -5,6 +5,7 @@ import { batterySlice } from './batterySlice';
 import { moodSlice } from './moodSlice';
 import { networkSlice } from './networkSlice';
 import { playerSlice } from './playerSlice';
+import { pomodoroSlice } from './pomodoroSlice';
 import { sessionSlice } from './sessionSlice';
 import { tagsSlice } from './tagsSlice';
 import { uiSlice } from './uiSlice';
@@ -15,6 +16,7 @@ export const store = configureStore({
     session: sessionSlice.reducer,
     mood: moodSlice.reducer,
     player: playerSlice.reducer,
+    pomodoro: pomodoroSlice.reducer,
     battery: batterySlice.reducer,
     network: networkSlice.reducer,
     tags: tagsSlice.reducer,

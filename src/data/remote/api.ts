@@ -4,13 +4,12 @@ import { isOfflineError, type AppError } from '@/core/errors';
 import { http, type HttpRequest } from '@/core/http';
 import { cacheGet, cacheKeys, cachePut } from '@/data/local/cache';
 import type {
-  AnswerResult,
   Chart,
   DiaryEntry,
-  GameRound,
-  GameStats,
   ListeningContext,
   Mood,
+  PomodoroSessionInput,
+  PomodoroStats,
   Profile,
   Recommendations,
   Song,
@@ -48,7 +47,7 @@ export const PAGE_SIZE = 20;
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Chart', 'Diary', 'Recs', 'Profile', 'GameStats'],
+  tagTypes: ['Chart', 'Diary', 'Recs', 'Profile', 'PomodoroStats'],
   endpoints: (b) => ({
     // API-04 search and browse
     songs: b.query<{ items: Song[]; total: number; offset: number }, { q: string; offset: number }>({
@@ -161,21 +160,16 @@ export const api = createApi({
       query: (body) => ({ url: `${apiBaseUrl()}/checkins`, method: 'POST', body }),
     }),
 
-    // API-11..13 game
-    startRound: b.mutation<GameRound, void>({
-      query: () => ({ url: `${apiBaseUrl()}/game-rounds`, method: 'POST', body: {} }),
+    // API-11..12 Pomodoro focus sessions & statistics
+    completePomodoroSession: b.mutation<PomodoroStats, PomodoroSessionInput>({
+      query: (body) => ({ url: `${apiBaseUrl()}/pomodoro-sessions`, method: 'POST', body }),
+      invalidatesTags: ['PomodoroStats'],
     }),
-    answer: b.mutation<AnswerResult, { roundId: string; index: number; artist: string | null }>({
-      query: ({ roundId, index, artist }) => ({
-        url: `${apiBaseUrl()}/game-rounds/${roundId}/answers/${index}`,
-        method: 'PUT',
-        body: { artist },
+    pomodoroStats: b.query<PomodoroStats, { todayStart: string }>({
+      query: ({ todayStart }) => ({
+        url: `${apiBaseUrl()}/me/pomodoro-stats?todayStart=${encodeURIComponent(todayStart)}`,
       }),
-      invalidatesTags: (r) => (r?.finished ? ['GameStats'] : []),
-    }),
-    gameStats: b.query<GameStats, void>({
-      query: () => ({ url: `${apiBaseUrl()}/me/game-stats` }),
-      providesTags: ['GameStats'],
+      providesTags: ['PomodoroStats'],
     }),
 
     // API-15 delete account
@@ -188,14 +182,14 @@ export const api = createApi({
 export const {
   useSongsQuery,
   useRecommendationsQuery,
+  useLazyRecommendationsQuery,
   useChartQuery,
   useDiaryQuery,
   useProfileQuery,
   useUpdateProfileMutation,
   useSongMoodsQuery,
   useCheckInMutation,
-  useStartRoundMutation,
-  useAnswerMutation,
-  useGameStatsQuery,
+  useCompletePomodoroSessionMutation,
+  usePomodoroStatsQuery,
   useDeleteAccountMutation,
 } = api;

@@ -9,6 +9,7 @@ const entry = (songId: number, mood: Mood, iso: string): DiaryEntry => ({
   createdAt: iso,
   song: {
     id: songId,
+    jamendoId: null,
     title: 't',
     artistName: 'a',
     albumName: null,
