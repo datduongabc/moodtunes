@@ -1,10 +1,12 @@
 # MoodTunes
 
 Mood-tagged music player for Android, built for CO3043 Mobile Application Development (HCMUT, semester 261).
-Listeners tag songs with moods, get recommendations for how they feel, follow weekly mood charts, track a daily listening battery and play the Mood Guess game.
+Listeners tag songs with moods, get recommendations for how they feel, follow weekly mood charts, track a daily listening battery, share songs to other apps and run Pomodoro focus sessions that play and pause music on their own.
 
 - Specification: Assignment 01 report (FR, NFR, architecture, data and API, UI/UX).
 - Changes to the specification: [CHANGELOG-spec.md](CHANGELOG-spec.md).
+- API contract: [docs/openapi.yaml](docs/openapi.yaml), with a Postman collection in [docs/moodtunes.postman_collection.json](docs/moodtunes.postman_collection.json).
+- Test report: [docs/test-report.md](docs/test-report.md).
 - Design: [Figma file](https://www.figma.com/design/ldKFvReiSfET2ObxAV62o5)
 
 ## Stack
@@ -43,7 +45,7 @@ Download `MoodTunes-<version>.apk` from the latest [GitHub release](../../releas
 ```bash
 npm run lint           # ESLint (expo config)
 npm run typecheck      # tsc --noEmit
-npm test               # Jest unit tests
+npm test               # Jest unit tests (domain rules and Edge Function validators)
 npm run test:coverage  # coverage of the domain layer (threshold 70%)
 ```
 
@@ -53,13 +55,13 @@ npm run test:coverage  # coverage of the domain layer (threshold 70%)
 src/
   app/            expo-router screens and layouts (presentation)
   presentation/   components, view-model hooks, theme
-  domain/         entities, rules (battery, game, outbox, check-in), use cases
+  domain/         entities, rules (battery, Pomodoro, sharing, charts, statistics, outbox, check-in), use cases
   data/           remote (RTK Query API), local (SQLite), player (expo-audio), sync (outbox engine)
   store/          Redux store, slices and service wiring
   core/           configuration, HTTP client, errors, Supabase client
 supabase/
   migrations/     schema, row-level security, SQL functions, cron jobs
-  functions/api/  Edge Function with the /v1 endpoints
+  functions/api/  Edge Function with the /v1 endpoints (validator tests in __tests__)
 scripts/          catalogue import and seed data
 ```
 
