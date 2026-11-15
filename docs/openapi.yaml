@@ -1,0 +1,479 @@
+openapi: 3.1.0
+info:
+  title: MoodTunes API
+  version: 1.2.0
+  description: |
+    Contract of the MoodTunes backend (A01 section 6.4). Identifiers API-01 to API-15 match table
+    6.4 of the specification; API-13 belonged to the removed game and is not reused.
+
+    Three Supabase services are used:
+    - `/auth/v1` (Supabase Auth) for accounts and tokens,
+    - `/rest/v1` (PostgREST) for plain reads protected by row-level security,
+    - `/functions/v1/api/v1` (Edge Function `api`) for operations with business rules.
+
+    Every request sends the `apikey` header (publishable key). Authenticated requests also send
+    `Authorization: Bearer <access token>`. Errors of the Edge Function use the `Error` schema.
+servers:
+  - url: https://{project}.supabase.co
+    variables:
+      project:
+        default: your-project-ref
+security:
+  - apikey: []
+    bearer: []
+tags:
+  - name: Auth
+  - name: Catalogue
+  - name: Tags
+  - name: Recommendations
+  - name: Charts
+  - name: Diary
+  - name: Focus
+  - name: Profile
+
+paths:
+  /auth/v1/signup:
+    post:
+      tags: [Auth]
+      summary: API-01 Sign up (FR-01)
+      security:
+        - apikey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '200':
+          description: Account created; the session is returned when email confirmation is disabled.
+        '422':
+          description: Email already registered or password too short.
+
+  /auth/v1/token:
+    post:
+      tags: [Auth]
+      summary: API-02 Sign in or refresh tokens (FR-01)
+      security:
+        - apikey: []
+      parameters:
+        - name: grant_type
+          in: query
+          required: true
+          schema: { type: string, enum: [password, refresh_token] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Credentials'
+                - type: object
+                  required: [refresh_token]
+                  properties:
+                    refresh_token: { type: string }
+      responses:
+        '200':
+          description: Tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  refresh_token: { type: string }
+                  expires_in: { type: integer }
+        '400':
+          description: Wrong email or password, or invalid refresh token.
+
+  /auth/v1/logout:
+    post:
+      tags: [Auth]
+      summary: API-03 Sign out (FR-01)
+      responses:
+        '204': { description: Signed out. }
+
+  /rest/v1/songs:
+    get:
+      tags: [Catalogue]
+      summary: API-04 Search and browse the catalogue (FR-02, FR-18)
+      description: |
+        Without `or`, songs are listed A to Z. With the FR-18 mood filter, the client adds
+        `select=*,song_mood_stats!inner(mood_code)` and `song_mood_stats.mood_code=eq.{mood}`, so
+        only songs that the community has tagged with the mood are returned.
+      parameters:
+        - { name: select, in: query, schema: { type: string, default: '*' } }
+        - name: or
+          in: query
+          description: Title or artist filter, for example `(title.ilike.*night*,artist_name.ilike.*night*)`.
+          schema: { type: string }
+        - { name: order, in: query, schema: { type: string, default: 'title.asc,id.asc' } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 20 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+        - name: Prefer
+          in: header
+          description: '`count=exact` returns the total in the `Content-Range` header.'
+          schema: { type: string }
+      responses:
+        '200':
+          description: One page of songs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SongRow' }
+
+  /rest/v1/profiles:
+    get:
+      tags: [Profile]
+      summary: API-05 Read own profile (FR-01, FR-08)
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, example: 'eq.{uid}' } }
+        - { name: select, in: query, schema: { type: string, default: 'id,display_name,daily_goal_min' } }
+      responses:
+        '200':
+          description: Own profile (row-level security returns no other rows).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProfileRow' }
+    patch:
+      tags: [Profile]
+      summary: API-05 Edit own profile (FR-01, FR-08)
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, example: 'eq.{uid}' } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string, minLength: 1, maxLength: 30 }
+                daily_goal_min: { type: integer, minimum: 30, maximum: 480 }
+      responses:
+        '204': { description: Updated. }
+
+  /rest/v1/mood_tags:
+    get:
+      tags: [Diary]
+      summary: API-09 Diary, own tags of the last 90 days (FR-07, FR-14)
+      parameters:
+        - name: select
+          in: query
+          schema: { type: string, default: 'song_id,mood_code,context,note,created_at,songs(*)' }
+        - { name: created_at, in: query, schema: { type: string, example: 'gte.2026-08-17T00:00:00Z' } }
+        - { name: order, in: query, schema: { type: string, default: 'created_at.desc' } }
+        - { name: limit, in: query, schema: { type: integer, default: 500 } }
+      responses:
+        '200':
+          description: Own tags with their songs.
+
+  /functions/v1/api/v1/recommendations:
+    get:
+      tags: [Recommendations]
+      summary: API-06 Mood-based recommendations (FR-06, FR-12)
+      parameters:
+        - { name: mood, in: query, required: true, schema: { $ref: '#/components/schemas/Mood' } }
+        - { name: context, in: query, schema: { $ref: '#/components/schemas/Context' } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 20 } }
+      responses:
+        '200':
+          description: Scored songs; `isSample` is true when seed songs fill an untagged mood.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Recommendations' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /functions/v1/api/v1/songs/{songId}/tags/{mood}:
+    parameters:
+      - { name: songId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      - { name: mood, in: path, required: true, schema: { $ref: '#/components/schemas/Mood' } }
+    put:
+      tags: [Tags]
+      summary: API-07 Add or update own tag, idempotent (FR-04, FR-09)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: [string, 'null'], maxLength: 140 }
+                context: { oneOf: [{ $ref: '#/components/schemas/Context' }, { type: 'null' }] }
+      responses:
+        '200':
+          description: The stored tag.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tag: { $ref: '#/components/schemas/Tag' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [Tags]
+      summary: API-08 Remove own tag, idempotent (FR-04, FR-09)
+      responses:
+        '204': { description: Removed, also when the tag did not exist. }
+        '400': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /functions/v1/api/v1/charts/{mood}:
+    get:
+      tags: [Charts]
+      summary: API-10 Weekly mood chart (FR-09, FR-13)
+      parameters:
+        - { name: mood, in: path, required: true, schema: { $ref: '#/components/schemas/Mood' } }
+        - { name: period, in: query, schema: { type: string, enum: [week], default: week } }
+      responses:
+        '200':
+          description: Latest snapshot with the caller's own votes.
+          headers:
+            Cache-Control: { schema: { type: string, example: 'private, max-age=60' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Chart' }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /functions/v1/api/v1/pomodoro-sessions:
+    post:
+      tags: [Focus]
+      summary: API-11 Record a completed focus session, idempotent by id (FR-12)
+      description: |
+        The device generates `id`, so a session resent after a lost response is stored once.
+        Sessions completed offline are sent later with their original `completedAt`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PomodoroSessionInput' }
+            example:
+              id: 5f2c9a1e-3b4d-4c5e-8f60-718293a4b5c6
+              focusMin: 25
+              breakMin: 5
+              mood: focused
+              completedAt: '2026-11-15T02:25:00.000Z'
+              todayStart: '2026-11-14T17:00:00.000Z'
+      responses:
+        '201':
+          description: Statistics after the session.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PomodoroStats' }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /functions/v1/api/v1/me/pomodoro-stats:
+    get:
+      tags: [Focus]
+      summary: API-12 Focus statistics (FR-12)
+      parameters:
+        - name: todayStart
+          in: query
+          required: true
+          description: Local midnight of the caller as an ISO instant, within the last 38 hours.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Totals and today's minutes in the caller's time zone.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PomodoroStats' }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /functions/v1/api/v1/checkins:
+    post:
+      tags: [Recommendations]
+      summary: API-14 Record a mood check-in (FR-05)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mood]
+              properties:
+                mood: { $ref: '#/components/schemas/Mood' }
+                context: { oneOf: [{ $ref: '#/components/schemas/Context' }, { type: 'null' }] }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /functions/v1/api/v1/me:
+    delete:
+      tags: [Profile]
+      summary: API-15 Delete account and all personal data (FR-01)
+      responses:
+        '204': { description: Deleted; tags, check-ins and focus sessions cascade. }
+        '500': { $ref: '#/components/responses/Internal' }
+
+components:
+  securitySchemes:
+    apikey:
+      type: apiKey
+      in: header
+      name: apikey
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Mood:
+      type: string
+      enum: [happy, sad, motivated, relaxed, focused, romantic, nostalgic, angry]
+    Context:
+      type: string
+      enum: [study, work, commute, workout]
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+    SongRow:
+      type: object
+      properties:
+        id: { type: integer }
+        jamendo_id: { type: string }
+        title: { type: string }
+        artist_name: { type: string }
+        album_name: { type: [string, 'null'] }
+        duration_sec: { type: integer }
+        audio_url: { type: string, format: uri }
+        image_url: { type: [string, 'null'] }
+        license_name: { type: string }
+        license_url: { type: string, format: uri }
+    Song:
+      type: object
+      properties:
+        id: { type: integer }
+        jamendoId: { type: string }
+        title: { type: string }
+        artistName: { type: string }
+        albumName: { type: [string, 'null'] }
+        durationSec: { type: integer }
+        audioUrl: { type: string, format: uri }
+        imageUrl: { type: [string, 'null'] }
+        licenseName: { type: string }
+        licenseUrl: { type: string, format: uri }
+    ProfileRow:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+        daily_goal_min: { type: integer }
+    Tag:
+      type: object
+      properties:
+        songId: { type: integer }
+        mood: { $ref: '#/components/schemas/Mood' }
+        context: { oneOf: [{ $ref: '#/components/schemas/Context' }, { type: 'null' }] }
+        note: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Recommendations:
+      type: object
+      properties:
+        mood: { $ref: '#/components/schemas/Mood' }
+        context: { oneOf: [{ $ref: '#/components/schemas/Context' }, { type: 'null' }] }
+        isSample: { type: boolean }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              song: { $ref: '#/components/schemas/Song' }
+              score: { type: number }
+    Chart:
+      type: object
+      properties:
+        mood: { $ref: '#/components/schemas/Mood' }
+        period: { type: string, enum: [week] }
+        computedAt: { type: [string, 'null'], format: date-time }
+        isSample: { type: boolean }
+        entries:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            properties:
+              rank: { type: integer, minimum: 1, maximum: 20 }
+              votes: { type: integer }
+              previousRank: { type: [integer, 'null'], description: 'Null for a song new in the chart (FR-13).' }
+              myVote: { type: boolean }
+              song: { $ref: '#/components/schemas/Song' }
+    PomodoroSessionInput:
+      type: object
+      required: [id, focusMin, breakMin, completedAt, todayStart]
+      properties:
+        id: { type: string, format: uuid }
+        focusMin: { type: integer, minimum: 5, maximum: 120 }
+        breakMin: { type: integer, minimum: 1, maximum: 30 }
+        mood: { oneOf: [{ $ref: '#/components/schemas/Mood' }, { type: 'null' }] }
+        completedAt: { type: string, format: date-time, description: 'Within the last 30 days.' }
+        todayStart: { type: string, format: date-time, description: "Caller's local midnight." }
+    PomodoroStats:
+      type: object
+      properties:
+        totalSessions: { type: integer }
+        totalFocusMinutes: { type: integer }
+        todayFocusMinutes: { type: integer }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                [
+                  VALIDATION_ERROR,
+                  UNAUTHENTICATED,
+                  FORBIDDEN,
+                  NOT_FOUND,
+                  RATE_LIMITED,
+                  INTERNAL_ERROR,
+                  SERVICE_UNAVAILABLE,
+                ]
+            message: { type: string }
+            details: { type: object }
+        requestId: { type: string }
+
+  responses:
+    Validation:
+      description: Invalid parameter; `details.field` names it.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthenticated:
+      description: Missing or expired token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The song no longer exists.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: More than 30 tag changes per minute.
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Internal:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
