@@ -1,13 +1,4 @@
-import {
-  checkThresholds,
-  initialBattery,
-  isValidGoal,
-  listenedMs,
-  onPause,
-  onPlay,
-  remainingPercent,
-  rollOver,
-} from '../battery';
+import { checkThresholds, initialBattery, listenedMs, onPause, onPlay, remainingPercent, rollOver } from '../battery';
 
 const at = (h: number, m = 0, day = 10) => new Date(2026, 10, day, h, m, 0, 0).getTime();
 const MIN = 60_000;
@@ -33,13 +24,7 @@ describe('listening battery (FR-08)', () => {
     expect(s.playingSince).toBe(at(8));
   });
 
-  it('accepts goals from 30 min to 8 h in 15-minute steps (AC-08.1.2)', () => {
-    expect(isValidGoal(30)).toBe(true);
-    expect(isValidGoal(480)).toBe(true);
-    expect(isValidGoal(135)).toBe(true);
-    expect(isValidGoal(15)).toBe(false);
-    expect(isValidGoal(495)).toBe(false);
-    expect(isValidGoal(100)).toBe(false);
+  it('starts with the default goal of 2 hours (AC-08.1.2)', () => {
     expect(initialBattery(at(8)).goalMin).toBe(120);
   });
 

@@ -15,5 +15,4 @@ export const sessionSlice = createSlice({
     signedOut: () => ({ status: 'signedOut' as const, userId: null, email: null }),
   },
 });
-export const { signedIn, signedOut } = sessionSlice.actions;
 export const sessionActions = sessionSlice.actions;

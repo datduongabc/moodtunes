@@ -1,3 +1,4 @@
+import { localDayKey } from './day';
 import type { Mood, PomodoroPhase } from './types';
 
 export const FOCUS_MIN_MIN = 5;
@@ -30,12 +31,6 @@ export function formatTimer(totalSeconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-/** Next phase when the current active timer reaches 0. */
-export function nextPhaseOnComplete(phase: PomodoroPhase): PomodoroPhase {
-  if (phase === 'focus') return 'break';
-  return 'idle';
-}
-
 export type PomodoroTransition = 'focusDone' | 'breakDone';
 
 /**
@@ -49,20 +44,6 @@ export function dueTransition(
 ): PomodoroTransition | null {
   if (s.phase === 'idle' || s.endsAtMs === null || nowMs < s.endsAtMs) return null;
   return s.phase === 'focus' ? 'focusDone' : 'breakDone';
-}
-
-/** Local midnight of the day containing `nowMs`; "today" in the statistics is the listener's day, not UTC. */
-export function startOfLocalDay(nowMs: number): Date {
-  const d = new Date(nowMs);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-/** "YYYY-MM-DD" of the local calendar day, used to reset the on-device counters at midnight. */
-export function localDayKey(nowMs: number): string {
-  const d = new Date(nowMs);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /** A completed focus session that the server has not acknowledged yet. */
