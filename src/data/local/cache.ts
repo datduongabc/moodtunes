@@ -7,10 +7,8 @@ export const cacheKeys = {
   chart: (mood: string) => `chart:${mood}`,
   recs: (mood: string, context: string | null) => `recs:${mood}:${context ?? '-'}`,
   diary: () => 'diary',
-  recentSongs: () => 'recent-songs',
 };
 
-export const FRESH_MS = { chart: 15 * 60_000, recs: 30 * 60_000 };
 const MAX_ENTRIES = 200;
 
 export async function cacheGet<T>(key: string): Promise<Cached<T> | null> {

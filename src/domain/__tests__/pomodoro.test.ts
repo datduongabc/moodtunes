@@ -6,13 +6,10 @@ import {
   FOCUS_MIN_MAX,
   FOCUS_MIN_MIN,
   formatTimer,
-  nextPhaseOnComplete,
   remainingSeconds,
   dueTransition,
   focusStats,
   newSessionId,
-  localDayKey,
-  startOfLocalDay,
 } from '../pomodoro';
 
 describe('pomodoro domain rules', () => {
@@ -38,12 +35,6 @@ describe('pomodoro domain rules', () => {
     expect(formatTimer(25 * 60)).toBe('25:00');
     expect(formatTimer(120 * 60)).toBe('120:00');
   });
-
-  it('transitions focus -> break -> idle on completion', () => {
-    expect(nextPhaseOnComplete('focus')).toBe('break');
-    expect(nextPhaseOnComplete('break')).toBe('idle');
-    expect(nextPhaseOnComplete('idle')).toBe('idle');
-  });
 });
 
 describe('dueTransition', () => {
@@ -58,20 +49,6 @@ describe('dueTransition', () => {
     // the app may only notice the deadline long after it passed, e.g. when it returns from the background
     expect(dueTransition({ phase: 'focus', endsAtMs: 5_000 }, 3_600_000)).toBe('focusDone');
     expect(dueTransition({ phase: 'break', endsAtMs: 5_000 }, 6_000)).toBe('breakDone');
-  });
-});
-
-describe('localDay', () => {
-  it('starts at local midnight and keys the same calendar day identically', () => {
-    const noon = new Date(2026, 10, 15, 12, 30).getTime();
-    const start = startOfLocalDay(noon);
-    expect(start.getHours()).toBe(0);
-    expect(start.getMinutes()).toBe(0);
-    expect(start.getDate()).toBe(15);
-    expect(localDayKey(noon)).toBe('2026-11-15');
-    expect(localDayKey(new Date(2026, 10, 15, 0, 5).getTime())).toBe('2026-11-15');
-    expect(localDayKey(new Date(2026, 10, 15, 23, 59).getTime())).toBe('2026-11-15');
-    expect(localDayKey(new Date(2026, 10, 16, 0, 0).getTime())).toBe('2026-11-16');
   });
 });
 

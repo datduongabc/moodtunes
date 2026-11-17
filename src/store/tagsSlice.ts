@@ -31,12 +31,6 @@ export const tagsSlice = createSlice({
       if (t) t.pending = false;
       if (s.pendingDeletes[a.payload.songId]) delete s.pendingDeletes[a.payload.songId]![a.payload.mood];
     },
-    pendingMarked: (s, a: PayloadAction<{ songId: number; mood: Mood }[]>) => {
-      for (const p of a.payload) {
-        const t = s.bySong[p.songId]?.[p.mood];
-        if (t) t.pending = true;
-      }
-    },
     cleared: () => ({ bySong: {}, pendingDeletes: {} }),
   },
   extraReducers: (b) => {

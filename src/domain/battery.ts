@@ -2,6 +2,8 @@
  * Listening battery (FR-08). Listening time is derived from play/pause timestamps,
  * never from a running timer (AC-08.1.5, NFR-BAT-01).
  */
+import { localDayKey, startOfLocalDay } from './day';
+
 export type BatteryState = {
   date: string; // local date YYYY-MM-DD
   listenedMs: number; // completed listening time today
@@ -16,23 +18,8 @@ export const GOAL_MAX = 480;
 export const GOAL_STEP = 15;
 export const GOAL_DEFAULT = 120;
 
-export const localDate = (t: number): string => {
-  const d = new Date(t);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-};
-
-const startOfLocalDay = (t: number): number => {
-  const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-};
-
-export const isValidGoal = (min: number) =>
-  Number.isInteger(min) && min >= GOAL_MIN && min <= GOAL_MAX && min % GOAL_STEP === 0;
-
 export const initialBattery = (now: number, goalMin = GOAL_DEFAULT): BatteryState => ({
-  date: localDate(now),
+  date: localDayKey(now),
   listenedMs: 0,
   playingSince: null,
   goalMin,
@@ -42,10 +29,10 @@ export const initialBattery = (now: number, goalMin = GOAL_DEFAULT): BatteryStat
 
 /** Resets the battery at local midnight (AC-08.1.4). A playing period that crosses midnight counts from 00:00. */
 export function rollOver(s: BatteryState, now: number): BatteryState {
-  if (s.date === localDate(now)) return s;
+  if (s.date === localDayKey(now)) return s;
   return {
     ...initialBattery(now, s.goalMin),
-    playingSince: s.playingSince === null ? null : Math.max(s.playingSince, startOfLocalDay(now)),
+    playingSince: s.playingSince === null ? null : Math.max(s.playingSince, startOfLocalDay(now).getTime()),
   };
 }
 

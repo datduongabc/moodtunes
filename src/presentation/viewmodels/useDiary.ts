@@ -1,17 +1,16 @@
 import { useMemo, useState } from 'react';
 import { hhmm } from '@/core/time';
+import { localDayKey } from '@/domain/day';
 import { groupByDay } from '@/domain/diary';
 import { MOOD_CODES, type DiaryEntry, type Mood, type Song, type ViewState } from '@/domain/types';
 import { useDiaryQuery } from '@/data/remote/api';
 import { useAppSelector } from '@/store';
 
 const dayLabel = (key: string, now = new Date()) => {
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const y = new Date(now);
   y.setDate(now.getDate() - 1);
-  if (key === fmt(now)) return 'Today';
-  if (key === fmt(y)) return 'Yesterday';
+  if (key === localDayKey(now.getTime())) return 'Today';
+  if (key === localDayKey(y.getTime())) return 'Yesterday';
   const [yy, mm, dd] = key.split('-').map(Number);
   return new Date(yy, mm - 1, dd).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 };

@@ -1,4 +1,5 @@
-import { focusStats, startOfLocalDay } from '@/domain/pomodoro';
+import { startOfLocalDay } from '@/domain/day';
+import { focusStats } from '@/domain/pomodoro';
 import { usePomodoroStatsQuery } from '@/data/remote/api';
 import { useAppSelector } from '@/store';
 import { useClock } from './useClock';
