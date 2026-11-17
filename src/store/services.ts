@@ -216,18 +216,32 @@ export async function shareSong(song: Song, moods: Mood[]) {
 }
 
 // ---------- session ----------
-export async function signOut() {
+/**
+ * Removes everything that belongs to the account (AC-01.2.2). It runs on every end of a session,
+ * not only on Sign out: a refresh token the server rejects, or a session already gone at start-up,
+ * would otherwise leave the queue, pending tags and focus sessions for the next account to send.
+ */
+let clearing: Promise<void> = Promise.resolve();
+function endSession() {
+  dispatch(sessionActions.signedOut()); // first, so persistSoon stops writing
+  Sentry.setUser(null);
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
   PlayerService.reset();
   watchThresholds(false);
-  await supabase.auth.signOut({ scope: 'local' });
-  await clearPersonalData(); // tokens, cache and pending outbox changes (AC-01.2.2)
   dispatch(playerActions.cleared());
   dispatch(pomodoroActions.cleared());
   dispatch(tagsActions.cleared());
   dispatch(moodActions.cleared());
   dispatch(batteryActions.cleared());
   dispatch(api.util.resetApiState());
-  dispatch(sessionActions.signedOut());
+  clearing = clearPersonalData(); // cache, outbox and saved state; device settings stay
+  return clearing;
+}
+
+export async function signOut() {
+  await supabase.auth.signOut({ scope: 'local' }); // emits SIGNED_OUT, which calls endSession
+  await clearing;
 }
 
 // ---------- bootstrap ----------
@@ -312,8 +326,7 @@ function onAuthChange(event: string, session: { user: { id: string; email?: stri
       void dispatch(api.endpoints.diary.initiate()); // own tags for the tag sheet
     });
   } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
-    dispatch(sessionActions.signedOut());
-    Sentry.setUser(null);
+    return endSession();
   }
 }
 

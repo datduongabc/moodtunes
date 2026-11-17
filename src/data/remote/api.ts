@@ -13,6 +13,7 @@ import type {
   Profile,
   Recommendations,
   Song,
+  Tag,
 } from '@/domain/types';
 import { diaryFromRow, profileFromRow, songFromRow, type ProfileRow, type SongRow, type TagRow } from './mappers';
 
@@ -151,6 +152,36 @@ export const api = createApi({
       },
     }),
 
+    // own tags of one song, whatever their age: the diary covers 90 days only, and a tag missing
+    // locally would be sent again as a PUT without its note
+    songTags: b.query<Tag[], number>({
+      query: (songId) => ({
+        url: `${restBaseUrl()}/mood_tags?song_id=eq.${songId}&select=mood_code,context,note,created_at`,
+      }),
+      transformResponse: (rows: Omit<TagRow, 'song_id' | 'songs'>[], _m, songId) =>
+        rows.map((r) => ({
+          songId,
+          mood: r.mood_code as Mood,
+          context: r.context as ListeningContext | null,
+          note: r.note,
+          createdAt: r.created_at,
+        })),
+      providesTags: ['Diary'],
+    }),
+
+    // number of own tags of all time, for Profile
+    tagCount: b.query<number, void>({
+      async queryFn() {
+        const res = await http<unknown[]>({
+          url: `${restBaseUrl()}/mood_tags?select=song_id&limit=1`,
+          headers: { Prefer: 'count=exact' },
+        });
+        if ('error' in res) return { error: res.error };
+        return { data: Number(res.headers.get('content-range')?.split('/')[1] ?? res.data.length) };
+      },
+      providesTags: ['Diary'],
+    }),
+
     // community moods of a song (aggregates only), for Song info
     songMoods: b.query<{ mood: Mood; percent: number }[], number>({
       query: (songId) => ({
@@ -193,6 +224,8 @@ export const {
   useProfileQuery,
   useUpdateProfileMutation,
   useSongMoodsQuery,
+  useSongTagsQuery,
+  useTagCountQuery,
   useCheckInMutation,
   useCompletePomodoroSessionMutation,
   usePomodoroStatsQuery,

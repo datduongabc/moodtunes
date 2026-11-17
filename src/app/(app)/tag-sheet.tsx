@@ -1,9 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { skipToken } from '@reduxjs/toolkit/query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
 import { MOODS } from '@/domain/moods';
+import type { Song } from '@/domain/types';
+import { useSongTagsQuery } from '@/data/remote/api';
 import { MoodChip } from '@/presentation/components/MoodChip';
 import { Txt } from '@/presentation/components/Txt';
 import { color, space } from '@/presentation/theme/tokens';
@@ -15,11 +18,24 @@ const NOTE_MAX = 140;
 /** SCR-09 Tag sheet (FR-04): two taps from Now Playing (AC-04.1.1), note up to 140 characters (AC-04.1.4). */
 export default function TagSheet() {
   const song = useAppSelector((s) => s.player.queue[s.player.index]);
-  const tags = useAppSelector((s) => (song ? s.tags.bySong[song.id] : undefined));
+  // a tag or note not loaded yet would be overwritten by the first tap or by Done
+  const { isLoading } = useSongTagsQuery(song?.id ?? skipToken);
+  if (!song) return null;
+  if (isLoading) {
+    return (
+      <View style={[styles.sheet, styles.loading]}>
+        <ActivityIndicator color={color.primary} accessibilityLabel="Loading your tags" />
+      </View>
+    );
+  }
+  return <TagSheetBody key={song.id} song={song} />;
+}
+
+function TagSheetBody({ song }: { song: Song }) {
+  const tags = useAppSelector((s) => s.tags.bySong[song.id]);
   const online = useAppSelector((s) => s.network.online);
   const firstNote = tags ? (Object.values(tags).find((t) => t?.note)?.note ?? '') : '';
   const [note, setNote] = useState(firstNote);
-  if (!song) return null;
   const selected = MOODS.filter((m) => tags?.[m.code]);
   const anyPending = selected.some((m) => tags?.[m.code]?.pending);
 
@@ -89,6 +105,7 @@ export default function TagSheet() {
 
 const styles = StyleSheet.create({
   sheet: { backgroundColor: color.container },
+  loading: { padding: space.area, alignItems: 'center' },
   content: { padding: space.margin, paddingBottom: space.area, gap: space.group },
   head: { gap: space.text },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.tight },
