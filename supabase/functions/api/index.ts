@@ -239,18 +239,15 @@ function todayStartFrom(v: unknown): Date {
 }
 
 async function pomodoroStatsFor(userId: string, todayStart: Date) {
-  const { data, error } = await admin.from('pomodoro_sessions').select('focus_min, completed_at').eq('user_id', userId);
+  const { data, error } = await admin
+    .rpc('pomodoro_stats', { p_user: userId, p_today_start: todayStart.toISOString() })
+    .single<{ total_sessions: number; total_focus_minutes: number; today_focus_minutes: number }>();
   if (error) throw fromDbError(error);
-  const todayMs = todayStart.getTime();
-  let totalFocusMinutes = 0;
-  let todayFocusMinutes = 0;
-  for (const row of data) {
-    const mins = row.focus_min as number;
-    totalFocusMinutes += mins;
-    // compare instants, not strings: Postgres returns "+00:00" offsets, not the "Z" of toISOString()
-    if (Date.parse(row.completed_at as string) >= todayMs) todayFocusMinutes += mins;
-  }
-  return { totalSessions: data.length, totalFocusMinutes, todayFocusMinutes };
+  return {
+    totalSessions: data.total_sessions,
+    totalFocusMinutes: data.total_focus_minutes,
+    todayFocusMinutes: data.today_focus_minutes,
+  };
 }
 
 // API-11 record a completed Pomodoro focus session
