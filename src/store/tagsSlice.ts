@@ -50,6 +50,18 @@ export const tagsSlice = createSlice({
         };
       }
     });
+    // the server's tags of one song replace the local ones, except changes not sent yet
+    b.addMatcher(api.endpoints.songTags.matchFulfilled, (s, a) => {
+      const songId = a.meta.arg.originalArgs;
+      const local = s.bySong[songId] ?? {};
+      const next: Partial<Record<Mood, LocalTag>> = {};
+      for (const [m, t] of Object.entries(local) as [Mood, LocalTag][]) if (t.pending) next[m] = t;
+      for (const t of a.payload) {
+        if (next[t.mood] || s.pendingDeletes[songId]?.[t.mood]) continue;
+        next[t.mood] = { note: t.note, context: t.context, createdAt: t.createdAt, pending: false };
+      }
+      s.bySong[songId] = next;
+    });
   },
 });
 export const tagsActions = tagsSlice.actions;

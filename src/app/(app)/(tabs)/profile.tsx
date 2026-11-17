@@ -4,7 +4,12 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Appbar, Button, Dialog, List, Portal, TextInput } from 'react-native-paper';
 import { minutesLabel } from '@/core/time';
-import { useDeleteAccountMutation, useDiaryQuery, useProfileQuery, useUpdateProfileMutation } from '@/data/remote/api';
+import {
+  useDeleteAccountMutation,
+  useProfileQuery,
+  useTagCountQuery,
+  useUpdateProfileMutation,
+} from '@/data/remote/api';
 import { Screen } from '@/presentation/components/Screen';
 import { Txt } from '@/presentation/components/Txt';
 import { color, MINI_PLAYER_SPACE, radius, space, tint } from '@/presentation/theme/tokens';
@@ -29,7 +34,7 @@ export default function Profile() {
   const goal = useAppSelector((s) => s.battery.goalMin);
   const { data: profile } = useProfileQuery(uid);
   const stats = usePomodoroStats();
-  const { data: diary } = useDiaryQuery();
+  const { data: tagCount } = useTagCountQuery(); // all time; the diary holds 90 days
   const [update] = useUpdateProfileMutation();
   const [deleteAccount, del] = useDeleteAccountMutation();
   const [editing, setEditing] = useState<string | null>(null);
@@ -77,7 +82,7 @@ export default function Profile() {
             {(
               [
                 ['timer-outline', `${stats.totalFocusMinutes}m`, 'Focus minutes'],
-                ['tag-outline', String(diary?.entries.length ?? 0), 'Mood tags'],
+                ['tag-outline', String(tagCount ?? 0), 'Mood tags'],
               ] as const
             ).map(([icon, value, label]) => (
               <View key={label} style={styles.stat}>

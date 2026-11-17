@@ -1,4 +1,6 @@
+import { skipToken } from '@reduxjs/toolkit/query';
 import { PlayerService } from '@/data/player/PlayerService';
+import { useSongTagsQuery } from '@/data/remote/api';
 import { MOOD_CODES, type Mood } from '@/domain/types';
 import { useAppSelector } from '@/store';
 
@@ -6,6 +8,7 @@ import { useAppSelector } from '@/store';
 export function useNowPlaying() {
   const p = useAppSelector((s) => s.player);
   const song = p.queue[p.index] ?? null;
+  useSongTagsQuery(song?.id ?? skipToken); // own tags older than the diary's 90 days too
   const myTags = useAppSelector((s) => (song ? s.tags.bySong[song.id] : undefined));
   const moods = MOOD_CODES.filter((m) => myTags?.[m]) as Mood[];
   return {

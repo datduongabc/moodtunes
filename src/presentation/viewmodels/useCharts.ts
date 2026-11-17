@@ -14,6 +14,7 @@ export function useCharts() {
   const [mood, setMood] = useState<Mood>(current ?? 'happy');
   const online = useAppSelector((s) => s.network.online);
   const myTags = useAppSelector((s) => s.tags.bySong);
+  const pendingDeletes = useAppSelector((s) => s.tags.pendingDeletes);
   const q = useChartQuery(mood, { refetchOnMountOrArgChange: 15 * 60 });
   const entries = q.data?.entries ?? [];
 
@@ -22,9 +23,11 @@ export function useCharts() {
   else if (q.isError) state = online ? 'error' : 'offline';
   else state = entries.length === 0 ? 'empty' : 'success';
 
+  // local state knows only the diary's 90 days, so a missing local tag defers to the server's myVote
   const voted = (songId: number, serverVote: boolean) => {
-    const local = myTags[songId];
-    return local ? !!local[mood] : serverVote;
+    if (myTags[songId]?.[mood]) return true;
+    if (pendingDeletes[songId]?.[mood]) return false;
+    return serverVote;
   };
 
   return {
